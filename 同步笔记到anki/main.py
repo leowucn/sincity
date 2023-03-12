@@ -3,6 +3,8 @@
 
 import os
 import re
+import time
+
 import requests
 import json
 import base64
@@ -14,6 +16,13 @@ class ExtractData:
 
     def remove_whitespace(self, str_data):
         return ''.join(str_data.split())
+
+    def remove_prefix_from_string(self, s):
+        """
+        去掉字符串前面的一个或多个数字、空格、"."
+        """
+        pattern = r'^[\d\s\.]+'
+        return re.sub(pattern, '', s)
 
     def extract_content(self, file_path):
         with open(file_path, "r", encoding="utf-8") as f:
@@ -29,6 +38,7 @@ class ExtractData:
                 extract = True
                 title = line[line.find("#") + 1: line.find("<!--s-->")].strip()
                 title = re.sub(r"^#+\s*", "", title).strip()
+                title = self.remove_prefix_from_string(title)
             elif "<!--e-->" in line:
                 extract = False
                 content_list.append({"header": title, "content": content.strip().replace("\n", "<br>")})
@@ -72,19 +82,45 @@ class Sync:
         self.image_path = image_dir_path
 
     def update_data(self, data):
+        m = {}
         for deck_name in data:
+            print("\n")
+            card_ids = self.find_cards_by_deck(deck_name)
+            card_info_list = self.get_cards_info(card_ids)
+            for card_info in card_info_list:
+                m[card_info["fields"]["Front"]["value"]] = card_info["cardId"]
+
             notes_list = data[deck_name]
 
             print(f"处理牌组 - {deck_name}")
-            # 先删除旧的牌组及其卡片数据
-            self.delete_all_note_of_deck_v2(deck_name)
-
             self.create_deck_if_need(deck_name)
 
             for note in notes_list:
-                self.add_note(deck_name, note["header"], note["content"])
+                # 从anki获取的卡片里去掉即将要更新的
+                if note["header"] in m:
+                    del m[note["header"]]
 
-    def add_note(self, deck_name, front, answer):
+                # 理论上一个卡片front只能找到一个卡片
+                card_ids = self.find_cards_by_front(note["header"])
+                card_info_list = self.get_cards_info(card_ids)
+
+                if len(card_info_list) > 0:
+                    for card_info in card_info_list:
+                        if card_info["fields"]["Back"]["value"] != self.prepare_answer(note["content"]):
+                            # 更新卡片之前先从anki删除卡片
+                            self.delete_note(card_info["note"])
+                            self.add_note(deck_name, note["header"], note["content"])
+
+                            # 如果采用更新的方式。修改后的卡片不会作为需要复习的
+                            # self.update_note_fields(card_info["note"], deck_name, note["header"], note["content"])
+                else:
+                    self.add_note(deck_name, note["header"], note["content"])
+
+        for _, note_id in m.items():
+            # 删除在od中已经不存在的笔记卡片
+            self.delete_note(note_id)
+
+    def prepare_answer(self, answer):
         image_info_list = re.findall(r'\!\[\[.*?\]\]', answer)
         for raw_md_image_info in image_info_list:
             image_info = self.extract_image_info(raw_md_image_info)
@@ -96,18 +132,21 @@ class Sync:
             if image_width is not None:
                 img_tag = f"<img src='{image_url}' width={int(image_width)}>"
             answer = answer.replace(raw_md_image_info, img_tag)
+        return answer
 
+    def add_note(self, deck_name, front, answer):
+        answer = self.prepare_answer(answer)
         fields = {
             "Front": front,
             "Back": answer
         }
-        requests.post(self.url, json.dumps({
+        response = requests.post(self.url, json.dumps({
             "action": "addNote",
             "version": 6,
             "params": {
                 "note": {
                     "deckName": deck_name,
-                    "modelName": "Basic",
+                    "modelName": "KaTex and Markdown Basic",
                     "fields": fields,
                     "options": {
                         "allowDuplicate": False
@@ -117,24 +156,56 @@ class Sync:
             }
         }))
 
+        self.print_msg(f"添加笔记, 标题: {front}", response.json()["error"])
+
+    def delete_note(self, note_id):
+        response = requests.post(self.url, json.dumps({
+            "action": "deleteNotes",
+            "version": 6,
+            "params": {
+                "notes": [int(note_id)]
+            }
+        }))
+        self.print_msg(f"删除笔记, 笔记id: {note_id}", response.json()["error"])
+
+    def update_note_fields(self, note_id, deck_name, front, answer):
+        answer = self.prepare_answer(answer)
+        res = requests.put(self.url, data=json.dumps({
+            "action": "updateNoteFields",
+            "version": 6,
+            "params": {
+                "note": {
+                    "id": int(note_id),
+                    "deckName": deck_name,
+                    "modelName": "KaTex and Markdown Basic",
+                    "fields": {
+                        "Front": front,
+                        "Back": answer
+                    }
+                }
+            }
+        }))
+
     def create_deck_if_need(self, deck_name):
         # 检查牌组是否存在，如果不存在则创建
         response = requests.post(self.url, json.dumps({
             "action": "deckNames"
         }))
+
         decks = json.loads(response.text)
         if deck_name not in decks:
-            requests.post(self.url, json.dumps({
+            response = requests.post(self.url, json.dumps({
                 "action": "createDeck",
                 "version": 6,
                 "params": {
                     "deck": deck_name
                 }
             }))
+            self.print_msg(f"创建牌组, 牌组名称: {deck_name}", response.json()["error"])
 
     def delete_deck(self, deck_name):
         # 删除牌组
-        requests.post(self.url, json.dumps({
+        response = requests.post(self.url, json.dumps({
             "action": "deleteDecks",
             "version": 6,
             "params": {
@@ -142,14 +213,27 @@ class Sync:
                 "cardsToo": True  # 如果该牌组下存在卡片，也会一并删除
             }
         }))
+        self.print_msg(f"删除牌组, 牌组名称: {deck_name}", response.json()["error"])
 
     def delete_all_note_of_deck_v2(self, deck_name):
         self.delete_all_images_of_deck(deck_name)
         self.delete_deck(deck_name)
 
     def delete_all_images_of_deck(self, deck_name):
-        action = "findCards"
+        image_src_list = []
+        card_ids = self.find_cards_by_deck(deck_name)
+        card_info_list = self.get_cards_info(card_ids)
+        for card_info in card_info_list:
+            card_back = card_info["fields"]["Back"]["value"]
+            img_src_list = self.extract_image_src(card_back)
+            if img_src_list:
+                image_src_list.extend(img_src_list)
 
+        for image_src in image_src_list:
+            self.delete_media_file(image_src)
+
+    def find_cards_by_deck(self, deck_name):
+        action = "findCards"
         # define the AnkiConnect parameters
         params = {
             "query": f"deck:{deck_name}"
@@ -160,13 +244,35 @@ class Sync:
             "params": params,
             "version": 6
         })
+        self.print_msg(f"根据牌组查询关联的卡片列表, 牌组名称: {deck_name}", response.json()["error"])
 
         # check if the request was successful
         if response.status_code != 200:
             raise Exception(response)
 
-        image_src_list = []
-        card_ids = response.json()["result"]
+        return response.json()["result"]
+
+    def find_cards_by_front(self, front):
+        action = "findCards"
+        # define the AnkiConnect parameters
+        params = {
+            "query": f"front:{front}"
+        }
+
+        response = requests.post(self.url, json={
+            "action": action,
+            "params": params,
+            "version": 6
+        })
+        self.print_msg(f"查询卡片列表", response.json()["error"])
+
+        # check if the request was successful
+        if response.status_code != 200:
+            raise Exception(response)
+
+        return response.json()["result"]
+
+    def get_cards_info(self, card_ids):
         payload = {
             "action": "cardsInfo",
             "version": 6,
@@ -175,14 +281,9 @@ class Sync:
             }
         }
         response = requests.post(self.url, json=payload)
-        for card_info in response.json()["result"]:
-            card_back = card_info["fields"]["Back"]["value"]
-            img_src_list = self.extract_image_src(card_back)
-            if img_src_list:
-                image_src_list.extend(img_src_list)
+        self.print_msg(f"根据卡片id查询卡片信息", response.json()["error"])
 
-        for image_src in image_src_list:
-            self.delete_media_file(image_src)
+        return response.json()["result"]
 
     def delete_media_file(self, media_file_name):
         payload = {
@@ -192,7 +293,8 @@ class Sync:
                 "filename": media_file_name
             }
         }
-        requests.post(self.url, json=payload)
+        response = requests.post(self.url, json=payload)
+        self.print_msg(f"删除图片或视频", response.json()["error"])
 
     def extract_image_src(self, str_data):
         return re.findall(r"<img.+?src=['\"](.+?)['\"].*?>", str_data)
@@ -203,17 +305,21 @@ class Sync:
             image_data = f.read()
         image_data_base64 = base64.b64encode(image_data).decode()
 
+        filename = os.path.basename(image_path)
+
         # Construct request data
         request_data = {
             "action": "storeMediaFile",
             "version": 6,
             "params": {
                 "data": image_data_base64,
-                "filename": os.path.basename(image_path),
+                "filename": filename,
             }
         }
 
         response = requests.post(f"{self.url}/action", json=request_data)
+
+        self.print_msg(f"存储图片或视频, filename: {filename}", response.json()["error"])
 
         if response.ok:
             media_id = response.json()["result"]
@@ -229,6 +335,12 @@ class Sync:
             return (filename, width)
         else:
             return (None, None)
+
+    def print_msg(self, msg, error):
+        if error is None:
+            print(f"成功{msg}")
+        else:
+            print(f"----------------------{msg}失败")
 
 
 note_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
