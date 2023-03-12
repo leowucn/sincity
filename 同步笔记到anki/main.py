@@ -41,7 +41,11 @@ class ExtractData:
                 title = self.remove_prefix_from_string(title)
             elif "<!--e-->" in line:
                 extract = False
-                content_list.append({"header": title, "content": content.strip().replace("\n", "<br>")})
+
+                content = content.strip().replace("\n", "<br/>")
+                item = {"header": title, "content": content}
+                content_list.append(item)
+
                 title = ""
                 content = ""
             elif extract:
@@ -146,7 +150,7 @@ class Sync:
             "params": {
                 "note": {
                     "deckName": deck_name,
-                    "modelName": "KaTex and Markdown Basic",
+                    "modelName": modelName,
                     "fields": fields,
                     "options": {
                         "allowDuplicate": False
@@ -340,9 +344,10 @@ class Sync:
         if error is None:
             print(f"成功{msg}")
         else:
-            print(f"----------------------{msg}失败")
+            print(f"----------------------{msg}失败. err: {error}")
 
-
+# modelName = "KaTex and Markdown Basic"
+modelName = "my_model"
 note_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
 image_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
 ignore_dirs = [".obsidian", ".trash"]
