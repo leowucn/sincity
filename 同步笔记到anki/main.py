@@ -39,10 +39,15 @@ class ExtractData:
                 title = line[line.find("#") + 1: line.find("<!--s-->")].strip()
                 title = re.sub(r"^#+\s*", "", title).strip()
                 title = self.remove_prefix_from_string(title)
+                title = title.replace("**", "")
+                title = title.replace("$", "")
             elif "<!--e-->" in line:
                 extract = False
 
+                content = content.strip()
+                content = content.replace("$", "")
                 content = content.strip().replace("\n", "<br/>")
+                # content = content.strip().replace("\n", "<br/>")
                 item = {"header": title, "content": content}
                 content_list.append(item)
 
@@ -85,34 +90,55 @@ class Sync:
         self.url = url
         self.image_path = image_dir_path
 
-    def update_data(self, data):
-        m = {}
+    def update_data(self, data, rootdeck_name):
+        deck_name_set = set()
+
+        all_decks = self.get_all_decks()
+        for deck_name in all_decks:
+            if not deck_name.startswith(rootdeck_name):
+                continue
+
+            deck_name_set.add(deck_name)
+
+        print("处理牌组----------------------------------------------------")
+        front_m = {}
         for deck_name in data:
+
+            # 判断是否有多余牌组需要删除
+            if deck_name in deck_name_set:
+                deck_name_set.remove(deck_name)
+            tmp_deck_name_set = deck_name_set.copy()
+            for dn in deck_name_set:
+                if deck_name.startswith(dn):
+                    tmp_deck_name_set.remove(dn)
+            deck_name_set = tmp_deck_name_set.copy()
+
             print("\n")
-            card_ids = self.find_cards_by_deck(deck_name)
-            card_info_list = self.get_cards_info(card_ids)
-            for card_info in card_info_list:
-                m[card_info["fields"]["Front"]["value"]] = card_info["cardId"]
+            deck_notes_list = self.find_notes_by_deck(deck_name)
+            for note_info in deck_notes_list:
+                front_m[note_info["fields"]["Front"]["value"]] = note_info["noteId"]
+
+            print(f"处理牌组 - <<{deck_name}>>")
+            for key in front_m:
+                print(f"<<{deck_name}>> 牌组已存在的笔记: {key}")
 
             notes_list = data[deck_name]
 
-            print(f"处理牌组 - {deck_name}")
             self.create_deck_if_need(deck_name)
 
             for note in notes_list:
                 # 从anki获取的卡片里去掉即将要更新的
-                if note["header"] in m:
-                    del m[note["header"]]
+                if note["header"] in front_m:
+                    print(f'该笔记需要保留: {note["header"]}')
+                    del front_m[note["header"]]
 
-                # 理论上一个卡片front只能找到一个卡片
-                card_ids = self.find_cards_by_front(note["header"])
-                card_info_list = self.get_cards_info(card_ids)
-
-                if len(card_info_list) > 0:
-                    for card_info in card_info_list:
-                        if card_info["fields"]["Back"]["value"] != self.prepare_answer(note["content"]):
+                notes_info_list = self.find_notes_by_front(note["header"])
+                #
+                if len(notes_info_list) > 0:
+                    for note_info in notes_info_list:
+                        if note_info["fields"]["Back"]["value"] != self.prepare_answer(note["content"]):
                             # 更新卡片之前先从anki删除卡片
-                            self.delete_note(card_info["note"])
+                            self.delete_note(note_info["noteId"])
                             self.add_note(deck_name, note["header"], note["content"])
 
                             # 如果采用更新的方式。修改后的卡片不会作为需要复习的
@@ -120,9 +146,21 @@ class Sync:
                 else:
                     self.add_note(deck_name, note["header"], note["content"])
 
-        for _, note_id in m.items():
+        print("\n\n处理需要删除的笔记----------------------------------------\n")
+        for header, note_id in front_m.items():
+            print(f"删除笔记: {header}")
             # 删除在od中已经不存在的笔记卡片
             self.delete_note(note_id)
+
+        print("\n\n删除多余牌组----------------------------------------------\n")
+        for deck_name in deck_name_set:
+            print(f"删除牌组: {deck_name}")
+            # 删除在od中已经不存在的笔记卡片
+            self.delete_deck(deck_name)
+
+    def get_all_decks(self):
+        decks = self.invoke('deckNames')
+        return decks
 
     def prepare_answer(self, answer):
         image_info_list = re.findall(r'\!\[\[.*?\]\]', answer)
@@ -207,7 +245,7 @@ class Sync:
             }))
             self.print_msg(f"创建牌组, 牌组名称: {deck_name}", response.json()["error"])
 
-    def delete_deck(self, deck_name):
+    def delete_deck_itself(self, deck_name):
         # 删除牌组
         response = requests.post(self.url, json.dumps({
             "action": "deleteDecks",
@@ -219,9 +257,9 @@ class Sync:
         }))
         self.print_msg(f"删除牌组, 牌组名称: {deck_name}", response.json()["error"])
 
-    def delete_all_note_of_deck_v2(self, deck_name):
+    def delete_deck(self, deck_name):
         self.delete_all_images_of_deck(deck_name)
-        self.delete_deck(deck_name)
+        self.delete_deck_itself(deck_name)
 
     def delete_all_images_of_deck(self, deck_name):
         image_src_list = []
@@ -275,6 +313,30 @@ class Sync:
             raise Exception(response)
 
         return response.json()["result"]
+
+    def invoke(self, method, **params):
+        payload = {'action': method, 'params': params, 'version': 6}
+        response = requests.post(self.url, data=json.dumps(payload))
+        return response.json()["result"]
+
+    def find_notes_by_front(self, front):
+        query = f'front:"{front}"'
+        note_ids = self.invoke('findNotes', query=query)
+        notes = []
+        for note_id in note_ids:
+            data = self.invoke('notesInfo', notes=[int(note_id)])
+            notes.extend(data)
+        return notes
+
+    def find_notes_by_deck(self, deck_name):
+        # query = f'deck:"{deck_name}"'
+        query = f'deck:"{deck_name}" -deck:"{deck_name}::*"'
+        note_ids = self.invoke('findNotes', query=query)
+        notes = []
+        for note_id in note_ids:
+            data = self.invoke('notesInfo', notes=[int(note_id)])
+            notes.extend(data)
+        return notes
 
     def get_cards_info(self, card_ids):
         payload = {
@@ -346,10 +408,14 @@ class Sync:
         else:
             print(f"----------------------{msg}失败. err: {error}")
 
-# modelName = "KaTex and Markdown Basic"
-modelName = "my_model"
+
+# 设置根牌组名称
+root_deck_name = "ob"
+modelName = "KaTex and Markdown Basic"
+# modelName = "Basic"
+# modelName = "my_model"
 note_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
 image_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
-ignore_dirs = [".obsidian", ".trash"]
+ignore_dirs = [".obsidian", ".trash", "A"]
 notes = ExtractData().extract_contents_from_dir(note_path, ignore_dirs=ignore_dirs)
-Sync("http://localhost:8765", image_path).update_data(notes)
+Sync("http://localhost:8765", image_path).update_data(notes, root_deck_name)
