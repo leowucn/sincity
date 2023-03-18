@@ -41,6 +41,8 @@ class ExtractData:
                 title = self.remove_prefix_from_string(title)
                 title = title.replace("**", "")
                 title = title.replace("$", "")
+                title = title.removesuffix(":")
+                title = title.removesuffix("：")
             elif "<!--e-->" in line:
                 extract = False
 
@@ -85,10 +87,71 @@ class ExtractData:
         return results
 
 
+class CheckSETag:
+    """
+    检查 directory 中的md文件是否有未匹配的 "<!--s-->"和"<!--e-->"标签
+    """
+
+    def check_file(self, file_path):
+        with open(file_path, "r", encoding="utf-8") as file:
+            lines = file.readlines()
+
+        stack = []
+        line_number = 1
+
+        for line in lines:
+            pos = 0
+            while pos < len(line):
+                start_pos = line.find("<!--s-->", pos)
+                end_pos = line.find("<!--e-->", pos)
+
+                if start_pos != -1 and (end_pos == -1 or start_pos < end_pos):
+                    stack.append((start_pos, line_number))
+                    pos = start_pos + len("<!--s-->")
+                elif end_pos != -1 and (start_pos == -1 or end_pos < start_pos):
+                    if not stack:
+                        msg = f"""
+                        File {file_path} contains mismatched tags:
+                        Found an unmatched <!--e--> at line {line_number}
+                        """
+                        raise Exception(f"文件检查错误: {msg}")
+                    stack.pop()
+                    pos = end_pos + len("<!--e-->")
+                else:
+                    break
+            line_number += 1
+
+        if stack:
+            msg = f"""
+            File {file_path} contains mismatched tags:
+            Found an unmatched <!--s--> at line {stack[-1][1]}")
+            """
+            raise Exception(f"文件检查错误: {msg}")
+
+    def get_file_extension(self, file_name):
+        if file_name.startswith('.'):
+            return file_name
+        return os.path.splitext(file_name)[1]
+    def check_directory(self, directory, ignored_directories, ignored_extensions):
+        """
+        检查目录中的md文件是否有没有匹配的 "<!--s-->"和"<!--e-->"标签
+        """
+        for root, dirs, files in os.walk(directory):
+            # Remove ignored directories from the list of dirs to prevent further traversal
+            dirs[:] = [d for d in dirs if d not in ignored_directories]
+
+            for file in files:
+                file_extension = self.get_file_extension(file)
+                if file_extension not in ignored_extensions:
+                    file_path = os.path.join(root, file)
+                    self.check_file(file_path)
+
+
 class Sync:
     def __init__(self, url, image_dir_path):
         self.url = url
         self.image_path = image_dir_path
+
 
     def update_data(self, data, rootdeck_name):
         deck_name_set = set()
@@ -412,10 +475,17 @@ class Sync:
 # 设置根牌组名称
 root_deck_name = "ob"
 modelName = "KaTex and Markdown Basic"
-# modelName = "Basic"
-# modelName = "my_model"
 note_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
 image_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
+# 忽略目录
 ignore_dirs = [".obsidian", ".trash", "A"]
+# "<!--s-->"和"<!--e-->"标签时将忽略如下格式的文件
+ignored_extensions = [
+    ".DS_Store",
+    ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".svg", ".heif", ".heic",
+    ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".3gp",
+]
+
+CheckSETag().check_directory(note_path, ignore_dirs, ignored_extensions)
 notes = ExtractData().extract_contents_from_dir(note_path, ignore_dirs=ignore_dirs)
 Sync("http://localhost:8765", image_path).update_data(notes, root_deck_name)
