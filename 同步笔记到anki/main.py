@@ -15,14 +15,14 @@ class ExtractData:
         pass
 
     def remove_whitespace(self, str_data):
-        return ''.join(str_data.split())
+        return "".join(str_data.split())
 
     def remove_prefix_from_string(self, s):
         """
         去掉字符串前面的一个或多个数字、空格、"."
         """
-        pattern = r'^[\d\s\.]+'
-        return re.sub(pattern, '', s)
+        pattern = r"^[\d\s\.]+"
+        return re.sub(pattern, "", s)
 
     def extract_content(self, file_path):
         with open(file_path, "r", encoding="utf-8") as f:
@@ -36,7 +36,7 @@ class ExtractData:
         for line in lines:
             if "<!--s-->" in line:
                 extract = True
-                title = line[line.find("#") + 1: line.find("<!--s-->")].strip()
+                title = line[line.find("#") + 1 : line.find("<!--s-->")].strip()
                 title = re.sub(r"^#+\s*", "", title).strip()
                 title = self.remove_prefix_from_string(title)
                 title = title.replace("**", "")
@@ -60,7 +60,9 @@ class ExtractData:
 
         return content_list
 
-    def extract_contents_from_dir(self, dir_path, level=1, parent_name=None, ignore_dirs=None):
+    def extract_contents_from_dir(
+        self, dir_path, level=1, parent_name=None, ignore_dirs=None
+    ):
         results = {}
         for file in os.listdir(dir_path):
             file_path = os.path.join(dir_path, file)
@@ -73,14 +75,16 @@ class ExtractData:
                     if key not in results:
                         results[key] = []
                     results[key].extend(contents)
-            elif os.path.isdir(file_path) and (ignore_dirs is None or os.path.basename(file_path) not in ignore_dirs):
+            elif os.path.isdir(file_path) and (
+                ignore_dirs is None or os.path.basename(file_path) not in ignore_dirs
+            ):
                 sub_results = self.extract_contents_from_dir(
                     file_path,
                     level + 1,
                     os.path.basename(dir_path)
                     if parent_name is None
                     else f"{parent_name}::{os.path.basename(dir_path)}",
-                    ignore_dirs=ignore_dirs
+                    ignore_dirs=ignore_dirs,
                 )
                 if sub_results:
                     results.update(sub_results)
@@ -129,9 +133,10 @@ class CheckSETag:
             raise Exception(f"文件检查错误: {msg}")
 
     def get_file_extension(self, file_name):
-        if file_name.startswith('.'):
+        if file_name.startswith("."):
             return file_name
         return os.path.splitext(file_name)[1]
+
     def check_directory(self, directory, ignored_directories, ignored_extensions):
         """
         检查目录中的md文件是否有没有匹配的 "<!--s-->"和"<!--e-->"标签
@@ -151,7 +156,6 @@ class Sync:
     def __init__(self, url, image_dir_path):
         self.url = url
         self.image_path = image_dir_path
-
 
     def update_data(self, data, rootdeck_name):
         deck_name_set = set()
@@ -199,7 +203,9 @@ class Sync:
                 #
                 if len(notes_info_list) > 0:
                     for note_info in notes_info_list:
-                        if note_info["fields"]["Back"]["value"] != self.prepare_answer(note["content"]):
+                        if note_info["fields"]["Back"]["value"] != self.prepare_answer(
+                            note["content"]
+                        ):
                             # 更新卡片之前先从anki删除卡片
                             self.delete_note(note_info["noteId"])
                             self.add_note(deck_name, note["header"], note["content"])
@@ -222,11 +228,11 @@ class Sync:
             self.delete_deck(deck_name)
 
     def get_all_decks(self):
-        decks = self.invoke('deckNames')
+        decks = self.invoke("deckNames")
         return decks
 
     def prepare_answer(self, answer):
-        image_info_list = re.findall(r'\!\[\[.*?\]\]', answer)
+        image_info_list = re.findall(r"\!\[\[.*?\]\]", answer)
         for raw_md_image_info in image_info_list:
             image_info = self.extract_image_info(raw_md_image_info)
             image_width = image_info[1]
@@ -241,83 +247,94 @@ class Sync:
 
     def add_note(self, deck_name, front, answer):
         answer = self.prepare_answer(answer)
-        fields = {
-            "Front": front,
-            "Back": answer
-        }
-        response = requests.post(self.url, json.dumps({
-            "action": "addNote",
-            "version": 6,
-            "params": {
-                "note": {
-                    "deckName": deck_name,
-                    "modelName": modelName,
-                    "fields": fields,
-                    "options": {
-                        "allowDuplicate": False
+        fields = {"Front": front, "Back": answer}
+        response = requests.post(
+            self.url,
+            json.dumps(
+                {
+                    "action": "addNote",
+                    "version": 6,
+                    "params": {
+                        "note": {
+                            "deckName": deck_name,
+                            "modelName": modelName,
+                            "fields": fields,
+                            "options": {"allowDuplicate": False},
+                            "tags": [],
+                        }
                     },
-                    "tags": []
                 }
-            }
-        }))
+            ),
+        )
 
         self.print_msg(f"添加笔记, 标题: {front}", response.json()["error"])
 
     def delete_note(self, note_id):
-        response = requests.post(self.url, json.dumps({
-            "action": "deleteNotes",
-            "version": 6,
-            "params": {
-                "notes": [int(note_id)]
-            }
-        }))
+        response = requests.post(
+            self.url,
+            json.dumps(
+                {
+                    "action": "deleteNotes",
+                    "version": 6,
+                    "params": {"notes": [int(note_id)]},
+                }
+            ),
+        )
         self.print_msg(f"删除笔记, 笔记id: {note_id}", response.json()["error"])
 
     def update_note_fields(self, note_id, deck_name, front, answer):
         answer = self.prepare_answer(answer)
-        res = requests.put(self.url, data=json.dumps({
-            "action": "updateNoteFields",
-            "version": 6,
-            "params": {
-                "note": {
-                    "id": int(note_id),
-                    "deckName": deck_name,
-                    "modelName": "KaTex and Markdown Basic",
-                    "fields": {
-                        "Front": front,
-                        "Back": answer
-                    }
+        res = requests.put(
+            self.url,
+            data=json.dumps(
+                {
+                    "action": "updateNoteFields",
+                    "version": 6,
+                    "params": {
+                        "note": {
+                            "id": int(note_id),
+                            "deckName": deck_name,
+                            "modelName": "KaTex and Markdown Basic",
+                            "fields": {"Front": front, "Back": answer},
+                        }
+                    },
                 }
-            }
-        }))
+            ),
+        )
 
     def create_deck_if_need(self, deck_name):
         # 检查牌组是否存在，如果不存在则创建
-        response = requests.post(self.url, json.dumps({
-            "action": "deckNames"
-        }))
+        response = requests.post(self.url, json.dumps({"action": "deckNames"}))
 
         decks = json.loads(response.text)
         if deck_name not in decks:
-            response = requests.post(self.url, json.dumps({
-                "action": "createDeck",
-                "version": 6,
-                "params": {
-                    "deck": deck_name
-                }
-            }))
+            response = requests.post(
+                self.url,
+                json.dumps(
+                    {
+                        "action": "createDeck",
+                        "version": 6,
+                        "params": {"deck": deck_name},
+                    }
+                ),
+            )
             self.print_msg(f"创建牌组, 牌组名称: {deck_name}", response.json()["error"])
 
     def delete_deck_itself(self, deck_name):
         # 删除牌组
-        response = requests.post(self.url, json.dumps({
-            "action": "deleteDecks",
-            "version": 6,
-            "params": {
-                "decks": [deck_name],
-                "cardsToo": True  # 如果该牌组下存在卡片，也会一并删除
-            }
-        }))
+        response = requests.post(
+            self.url,
+            json.dumps(
+                {
+                    "action": "deleteDecks",
+                    "version": 6,
+                    "params": {
+                        "decks": [deck_name],
+                        "cardsToo": True,  # 如果该牌组下存在卡片，也会一并删除
+                    },
+                }
+            ),
+        )
         self.print_msg(f"删除牌组, 牌组名称: {deck_name}", response.json()["error"])
 
     def delete_deck(self, deck_name):
@@ -340,15 +357,11 @@ class Sync:
     def find_cards_by_deck(self, deck_name):
         action = "findCards"
         # define the AnkiConnect parameters
-        params = {
-            "query": f"deck:{deck_name}"
-        }
+        params = {"query": f"deck:{deck_name}"}
 
-        response = requests.post(self.url, json={
-            "action": action,
-            "params": params,
-            "version": 6
-        })
+        response = requests.post(
+            self.url, json={"action": action, "params": params, "version": 6}
+        )
         self.print_msg(f"根据牌组查询关联的卡片列表, 牌组名称: {deck_name}", response.json()["error"])
 
         # check if the request was successful
@@ -360,15 +373,11 @@ class Sync:
     def find_cards_by_front(self, front):
         action = "findCards"
         # define the AnkiConnect parameters
-        params = {
-            "query": f"front:{front}"
-        }
+        params = {"query": f"front:{front}"}
 
-        response = requests.post(self.url, json={
-            "action": action,
-            "params": params,
-            "version": 6
-        })
+        response = requests.post(
+            self.url, json={"action": action, "params": params, "version": 6}
+        )
         self.print_msg(f"查询卡片列表", response.json()["error"])
 
         # check if the request was successful
@@ -378,37 +387,31 @@ class Sync:
         return response.json()["result"]
 
     def invoke(self, method, **params):
-        payload = {'action': method, 'params': params, 'version': 6}
+        payload = {"action": method, "params": params, "version": 6}
         response = requests.post(self.url, data=json.dumps(payload))
         return response.json()["result"]
 
     def find_notes_by_front(self, front):
         query = f'front:"{front}"'
-        note_ids = self.invoke('findNotes', query=query)
+        note_ids = self.invoke("findNotes", query=query)
         notes = []
         for note_id in note_ids:
-            data = self.invoke('notesInfo', notes=[int(note_id)])
+            data = self.invoke("notesInfo", notes=[int(note_id)])
             notes.extend(data)
         return notes
 
     def find_notes_by_deck(self, deck_name):
         # query = f'deck:"{deck_name}"'
         query = f'deck:"{deck_name}" -deck:"{deck_name}::*"'
-        note_ids = self.invoke('findNotes', query=query)
+        note_ids = self.invoke("findNotes", query=query)
         notes = []
         for note_id in note_ids:
-            data = self.invoke('notesInfo', notes=[int(note_id)])
+            data = self.invoke("notesInfo", notes=[int(note_id)])
             notes.extend(data)
         return notes
 
     def get_cards_info(self, card_ids):
-        payload = {
-            "action": "cardsInfo",
-            "version": 6,
-            "params": {
-                "cards": card_ids
-            }
-        }
+        payload = {"action": "cardsInfo", "version": 6, "params": {"cards": card_ids}}
         response = requests.post(self.url, json=payload)
         self.print_msg(f"根据卡片id查询卡片信息", response.json()["error"])
 
@@ -418,9 +421,7 @@ class Sync:
         payload = {
             "action": "deleteMediaFile",
             "version": 6,
-            "params": {
-                "filename": media_file_name
-            }
+            "params": {"filename": media_file_name},
         }
         response = requests.post(self.url, json=payload)
         self.print_msg(f"删除图片或视频", response.json()["error"])
@@ -443,7 +444,7 @@ class Sync:
             "params": {
                 "data": image_data_base64,
                 "filename": filename,
-            }
+            },
         }
 
         response = requests.post(f"{self.url}/action", json=request_data)
@@ -457,7 +458,9 @@ class Sync:
         return media_id
 
     def extract_image_info(self, md_image_info):
-        match = re.match(r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]", md_image_info)
+        match = re.match(
+            r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]", md_image_info
+        )
         if match:
             filename = match.group("filename")
             width = match.group("width")
@@ -469,7 +472,7 @@ class Sync:
         if error is None:
             print(f"成功{msg}")
         else:
-            print(f"----------------------{msg}失败. err: {error}")
+            print(f"--------------------------------------------------------{msg}失败. err: {error}")
 
 
 # 设置根牌组名称
@@ -478,12 +481,27 @@ modelName = "KaTex and Markdown Basic"
 note_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
 image_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
 # 忽略目录
-ignore_dirs = [".obsidian", ".trash", "A"]
+ignore_dirs = [".obsidian", ".trash"]
 # "<!--s-->"和"<!--e-->"标签时将忽略如下格式的文件
 ignored_extensions = [
     ".DS_Store",
-    ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".svg", ".heif", ".heic",
-    ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".3gp",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".tiff",
+    ".svg",
+    ".heif",
+    ".heic",
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".mpg",
+    ".3gp",
 ]
 
 CheckSETag().check_directory(note_path, ignore_dirs, ignored_extensions)
