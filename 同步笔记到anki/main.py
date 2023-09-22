@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+from platform import node
 import re
-import time
 
 import requests
 import json
@@ -50,8 +50,9 @@ class ExtractData:
                 content = content.replace("$", "")
                 content = content.strip().replace("\n", "<br/>")
                 # content = content.strip().replace("\n", "<br/>")
-                item = {"header": title, "content": content}
-                content_list.append(item)
+                if title:
+                    item = {"header": title, "content": content}
+                    content_list.append(item)
 
                 title = ""
                 content = ""
@@ -67,8 +68,7 @@ class ExtractData:
         for file in os.listdir(dir_path):
             file_path = os.path.join(dir_path, file)
             if os.path.isfile(file_path) and file.endswith(".md"):
-                contents = self.extract_content(file_path)
-                if contents:
+                if contents := self.extract_content(file_path):
                     dir_name = os.path.basename(os.path.dirname(file_path))
                     key = dir_name if level == 1 else f"{parent_name}::{dir_name}"
                     key = self.remove_whitespace(key)
@@ -87,7 +87,7 @@ class ExtractData:
                     ignore_dirs=ignore_dirs,
                 )
                 if sub_results:
-                    results.update(sub_results)
+                    results |= sub_results
         return results
 
 
@@ -97,13 +97,14 @@ class CheckSETag:
     """
 
     def check_file(self, file_path):
+        if not file_path.endswith(".md"):
+            return
+
         with open(file_path, "r", encoding="utf-8") as file:
             lines = file.readlines()
 
         stack = []
-        line_number = 1
-
-        for line in lines:
+        for line_number, line in enumerate(lines, start=1):
             pos = 0
             while pos < len(line):
                 start_pos = line.find("<!--s-->", pos)
@@ -118,19 +119,17 @@ class CheckSETag:
                         File {file_path} contains mismatched tags:
                         Found an unmatched <!--e--> at line {line_number}
                         """
-                        raise Exception(f"文件检查错误: {msg}")
+                        raise RuntimeError(f"文件检查错误: {msg}")
                     stack.pop()
                     pos = end_pos + len("<!--e-->")
                 else:
                     break
-            line_number += 1
-
         if stack:
             msg = f"""
             File {file_path} contains mismatched tags:
             Found an unmatched <!--s--> at line {stack[-1][1]}")
             """
-            raise Exception(f"文件检查错误: {msg}")
+            raise RuntimeError(f"文件检查错误: {msg}")
 
     def get_file_extension(self, file_name):
         if file_name.startswith("."):
@@ -188,7 +187,7 @@ class Sync:
             print(f"处理牌组 - <<{deck_name}>>")
             for key in front_m:
                 print(f"<<{deck_name}>> 牌组已存在的笔记: {key}")
-
+            
             notes_list = data[deck_name]
 
             self.create_deck_if_need(deck_name)
@@ -228,8 +227,7 @@ class Sync:
             self.delete_deck(deck_name)
 
     def get_all_decks(self):
-        decks = self.invoke("deckNames")
-        return decks
+        return self.invoke("deckNames")
 
     def prepare_answer(self, answer):
         image_info_list = re.findall(r"\!\[\[.*?\]\]", answer)
@@ -347,44 +345,38 @@ class Sync:
         card_info_list = self.get_cards_info(card_ids)
         for card_info in card_info_list:
             card_back = card_info["fields"]["Back"]["value"]
-            img_src_list = self.extract_image_src(card_back)
-            if img_src_list:
+            if img_src_list := self.extract_image_src(card_back):
                 image_src_list.extend(img_src_list)
 
         for image_src in image_src_list:
             self.delete_media_file(image_src)
 
     def find_cards_by_deck(self, deck_name):
-        action = "findCards"
-        # define the AnkiConnect parameters
-        params = {"query": f"deck:{deck_name}"}
-
-        response = requests.post(
-            self.url, json={"action": action, "params": params, "version": 6}
-        )
+        response = self._find_cards('deck:', deck_name)
         self.print_msg(f"根据牌组查询关联的卡片列表, 牌组名称: {deck_name}", response.json()["error"])
 
         # check if the request was successful
         if response.status_code != 200:
-            raise Exception(response)
+            raise RuntimeError(response)
 
         return response.json()["result"]
 
     def find_cards_by_front(self, front):
-        action = "findCards"
-        # define the AnkiConnect parameters
-        params = {"query": f"front:{front}"}
-
-        response = requests.post(
-            self.url, json={"action": action, "params": params, "version": 6}
-        )
-        self.print_msg(f"查询卡片列表", response.json()["error"])
+        response = self._find_cards('front:', front)
+        self.print_msg("查询卡片列表", response.json()["error"])
 
         # check if the request was successful
         if response.status_code != 200:
-            raise Exception(response)
+            raise RuntimeError(response)
 
         return response.json()["result"]
+
+    def _find_cards(self, arg0, arg1):
+        action = "findCards"
+        params = {"query": f"{arg0}{arg1}"}
+        return requests.post(
+            self.url, json={"action": action, "params": params, "version": 6}
+        )
 
     def invoke(self, method, **params):
         payload = {"action": method, "params": params, "version": 6}
@@ -393,27 +385,26 @@ class Sync:
 
     def find_notes_by_front(self, front):
         query = f'front:"{front}"'
-        note_ids = self.invoke("findNotes", query=query)
-        notes = []
-        for note_id in note_ids:
-            data = self.invoke("notesInfo", notes=[int(note_id)])
-            notes.extend(data)
-        return notes
+        return self._find_notes(query)
 
     def find_notes_by_deck(self, deck_name):
         # query = f'deck:"{deck_name}"'
         query = f'deck:"{deck_name}" -deck:"{deck_name}::*"'
+        return self._find_notes(query)
+
+    def _find_notes(self, query):
         note_ids = self.invoke("findNotes", query=query)
         notes = []
-        for note_id in note_ids:
-            data = self.invoke("notesInfo", notes=[int(note_id)])
-            notes.extend(data)
+        if note_ids:
+            for note_id in note_ids:
+                data = self.invoke("notesInfo", notes=[int(note_id)])
+                notes.extend(data)
         return notes
 
     def get_cards_info(self, card_ids):
         payload = {"action": "cardsInfo", "version": 6, "params": {"cards": card_ids}}
         response = requests.post(self.url, json=payload)
-        self.print_msg(f"根据卡片id查询卡片信息", response.json()["error"])
+        self.print_msg("根据卡片id查询卡片信息", response.json()["error"])
 
         return response.json()["result"]
 
@@ -424,7 +415,7 @@ class Sync:
             "params": {"filename": media_file_name},
         }
         response = requests.post(self.url, json=payload)
-        self.print_msg(f"删除图片或视频", response.json()["error"])
+        self.print_msg("删除图片或视频", response.json()["error"])
 
     def extract_image_src(self, str_data):
         return re.findall(r"<img.+?src=['\"](.+?)['\"].*?>", str_data)
@@ -451,22 +442,18 @@ class Sync:
 
         self.print_msg(f"存储图片或视频, filename: {filename}", response.json()["error"])
 
-        if response.ok:
-            media_id = response.json()["result"]
-        else:
-            media_id = None
-        return media_id
+        return response.json()["result"] if response.ok else None
 
     def extract_image_info(self, md_image_info):
-        match = re.match(
-            r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]", md_image_info
-        )
-        if match:
-            filename = match.group("filename")
-            width = match.group("width")
-            return (filename, width)
-        else:
+        if not (
+            match := re.match(
+                r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]",
+                md_image_info,
+            )
+        ):
             return (None, None)
+        filename = match["filename"]
+        return filename, match["width"]
 
     def print_msg(self, msg, error):
         if error is None:
@@ -506,4 +493,5 @@ ignored_extensions = [
 
 CheckSETag().check_directory(note_path, ignore_dirs, ignored_extensions)
 notes = ExtractData().extract_contents_from_dir(note_path, ignore_dirs=ignore_dirs)
+
 Sync("http://localhost:8765", image_path).update_data(notes, root_deck_name)
