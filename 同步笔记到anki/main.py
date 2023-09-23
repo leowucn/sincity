@@ -54,12 +54,14 @@ class ExtractData:
                 content = content.replace("$", "")
                 content = content.strip().replace("\n", "<br/>")
                 if title and title not in ['```', 'title']:
-                    item = {"header": title, "content": content}
+                    item = {"header": title.lstrip("#").strip(), "content": content}
                     content_list.append(item)
 
                 title = ""
                 content = ""
             elif extract:
+                if line.startswith("````"):
+                    continue
                 content += line
 
             # Update the previous line
