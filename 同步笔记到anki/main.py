@@ -12,7 +12,8 @@ import base64
 
 class ExtractData:
     def __init__(self):
-        pass
+        self.start_flag = "<-s->"
+        self.end_flag = "<-e->"
 
     def remove_whitespace(self, str_data):
         return "".join(str_data.split())
@@ -36,7 +37,7 @@ class ExtractData:
         prev_line = ""
 
         for line in lines:
-            if "<!--s-->" in line:
+            if "<-s->" in line:
                 extract = True
                 # Use the content from the previous non-empty line as the title
                 title = prev_line.strip()
@@ -46,13 +47,13 @@ class ExtractData:
                 title = title.replace("$", "")
                 title = title.removesuffix(":")
                 title = title.removesuffix("：")
-            elif "<!--e-->" in line:
+            elif "<-e->" in line:
                 extract = False
 
                 content = content.strip()
                 content = content.replace("$", "")
                 content = content.strip().replace("\n", "<br/>")
-                if title and title != '```':
+                if title and title not in ['```', 'title']:
                     item = {"header": title, "content": content}
                     content_list.append(item)
 
@@ -99,7 +100,7 @@ class ExtractData:
 
 class CheckSETag:
     """
-    检查 directory 中的md文件是否有未匹配的 "<!--s-->"和"<!--e-->"标签
+    检查 directory 中的md文件是否有未匹配的 "<-s->"和"<-e->"标签
     """
 
     def check_file(self, file_path):
@@ -113,27 +114,27 @@ class CheckSETag:
         for line_number, line in enumerate(lines, start=1):
             pos = 0
             while pos < len(line):
-                start_pos = line.find("<!--s-->", pos)
-                end_pos = line.find("<!--e-->", pos)
+                start_pos = line.find("<-s->", pos)
+                end_pos = line.find("<-e->", pos)
 
                 if start_pos != -1 and (end_pos == -1 or start_pos < end_pos):
                     stack.append((start_pos, line_number))
-                    pos = start_pos + len("<!--s-->")
+                    pos = start_pos + len("<-s->")
                 elif end_pos != -1 and (start_pos == -1 or end_pos < start_pos):
                     if not stack:
                         msg = f"""
                         File {file_path} contains mismatched tags:
-                        Found an unmatched <!--e--> at line {line_number}
+                        Found an unmatched <-e-> at line {line_number}
                         """
                         raise RuntimeError(f"文件检查错误: {msg}")
                     stack.pop()
-                    pos = end_pos + len("<!--e-->")
+                    pos = end_pos + len("<-e->")
                 else:
                     break
         if stack:
             msg = f"""
             File {file_path} contains mismatched tags:
-            Found an unmatched <!--s--> at line {stack[-1][1]}")
+            Found an unmatched <-s-> at line {stack[-1][1]}")
             """
             raise RuntimeError(f"文件检查错误: {msg}")
 
@@ -144,7 +145,7 @@ class CheckSETag:
 
     def check_directory(self, directory, ignored_directories, ignored_extensions):
         """
-        检查目录中的md文件是否有没有匹配的 "<!--s-->"和"<!--e-->"标签
+        检查目录中的md文件是否有没有匹配的 "<-s->"和"<-e->"标签
         """
         for root, dirs, files in os.walk(directory):
             # Remove ignored directories from the list of dirs to prevent further traversal
@@ -491,7 +492,7 @@ note_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents
 image_path = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
 # 忽略目录
 ignore_dirs = [".obsidian", ".trash"]
-# "<!--s-->"和"<!--e-->"标签时将忽略如下格式的文件
+# "<-s->"和"<-e->"标签时将忽略如下格式的文件
 ignored_extensions = [
     ".DS_Store",
     ".jpeg",
