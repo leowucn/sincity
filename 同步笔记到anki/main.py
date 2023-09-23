@@ -33,10 +33,13 @@ class ExtractData:
         content = ""
 
         extract = False
+        prev_line = ""
+
         for line in lines:
             if "<!--s-->" in line:
                 extract = True
-                title = line[line.find("#") + 1 : line.find("<!--s-->")].strip()
+                # Use the content from the previous non-empty line as the title
+                title = prev_line.strip()
                 title = re.sub(r"^#+\s*", "", title).strip()
                 title = self.remove_prefix_from_string(title)
                 title = title.replace("**", "")
@@ -49,8 +52,7 @@ class ExtractData:
                 content = content.strip()
                 content = content.replace("$", "")
                 content = content.strip().replace("\n", "<br/>")
-                # content = content.strip().replace("\n", "<br/>")
-                if title:
+                if title and title != '```':
                     item = {"header": title, "content": content}
                     content_list.append(item)
 
@@ -59,7 +61,11 @@ class ExtractData:
             elif extract:
                 content += line
 
+            # Update the previous line
+            prev_line = line
+
         return content_list
+
 
     def extract_contents_from_dir(
         self, dir_path, level=1, parent_name=None, ignore_dirs=None
@@ -169,7 +175,6 @@ class Sync:
         print("处理牌组----------------------------------------------------")
         front_m = {}
         for deck_name in data:
-
             # 判断是否有多余牌组需要删除
             if deck_name in deck_name_set:
                 deck_name_set.remove(deck_name)
@@ -187,7 +192,7 @@ class Sync:
             print(f"处理牌组 - <<{deck_name}>>")
             for key in front_m:
                 print(f"<<{deck_name}>> 牌组已存在的笔记: {key}")
-            
+
             notes_list = data[deck_name]
 
             self.create_deck_if_need(deck_name)
@@ -197,6 +202,7 @@ class Sync:
                 if note["header"] in front_m:
                     print(f'该笔记需要保留: {note["header"]}')
                     del front_m[note["header"]]
+                    continue
 
                 notes_info_list = self.find_notes_by_front(note["header"])
                 #
@@ -231,15 +237,15 @@ class Sync:
 
     def prepare_answer(self, answer):
         image_info_list = re.findall(r"\!\[\[.*?\]\]", answer)
+        image_info_list.extend(re.findall(r"!\[\][\(\[].*?[\)\]]", answer))
+
         for raw_md_image_info in image_info_list:
-            image_info = self.extract_image_info(raw_md_image_info)
-            image_width = image_info[1]
-            image_path = os.path.join(self.image_path, str(image_info[0]))
+            image_file_name = self.extract_image_info(raw_md_image_info)
+            image_path = os.path.join(self.image_path, image_file_name)
             image_url = self.store_media_file(image_path)
 
             img_tag = f"<img src='{image_url}'>"
-            if image_width is not None:
-                img_tag = f"<img src='{image_url}' width={int(image_width)}>"
+
             answer = answer.replace(raw_md_image_info, img_tag)
         return answer
 
@@ -352,7 +358,7 @@ class Sync:
             self.delete_media_file(image_src)
 
     def find_cards_by_deck(self, deck_name):
-        response = self._find_cards('deck:', deck_name)
+        response = self._find_cards("deck:", deck_name)
         self.print_msg(f"根据牌组查询关联的卡片列表, 牌组名称: {deck_name}", response.json()["error"])
 
         # check if the request was successful
@@ -362,7 +368,7 @@ class Sync:
         return response.json()["result"]
 
     def find_cards_by_front(self, front):
-        response = self._find_cards('front:', front)
+        response = self._find_cards("front:", front)
         self.print_msg("查询卡片列表", response.json()["error"])
 
         # check if the request was successful
@@ -445,21 +451,37 @@ class Sync:
         return response.json()["result"] if response.ok else None
 
     def extract_image_info(self, md_image_info):
-        if not (
-            match := re.match(
-                r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]",
-                md_image_info,
-            )
-        ):
-            return (None, None)
-        filename = match["filename"]
-        return filename, match["width"]
+        def v1():
+            if not (
+                match := re.match(
+                    r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]",
+                    md_image_info,
+                )
+            ):
+                return None
+            return match["filename"]
+
+        def v2():
+            pattern = r"!\[\]\((.*?)\)"
+            match = re.search(pattern, md_image_info)
+
+            if match:
+                path = match[1]
+                return path
+            else:
+                return None
+        
+        file_name = v1() or v2()
+        
+        return file_name
 
     def print_msg(self, msg, error):
         if error is None:
             print(f"成功{msg}")
         else:
-            print(f"--------------------------------------------------------{msg}失败. err: {error}")
+            print(
+                f"--------------------------------------------------------{msg}失败. err: {error}"
+            )
 
 
 # 设置根牌组名称
