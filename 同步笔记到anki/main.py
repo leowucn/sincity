@@ -282,7 +282,7 @@ def store_media_file(image_path):
 
     response = requests.post(f"{ANKI_CONNECT}/action", json=request_data)
 
-    print_msg(f"存储图片或视频, image_path: {ROOT_IMAGE_PATH}", response.json()["error"])
+    # print_msg(f"存储图片或视频, image_path: {ROOT_IMAGE_PATH}", response.json()["error"])
 
     return response.json()["result"] if response.ok else None
 
@@ -451,9 +451,8 @@ def add_note(deck_name, front, back):
         ),
     )
 
-    print()
-
-    print_msg(f"添加笔记, 标题: {get_front_title(front)}", response.json()["error"])
+    err_msg = response.json()["error"]
+    print_msg(f"添加笔记, 标题: {get_front_title(front)}", err_msg)
 
 
 def get_front_title(front_value):
@@ -497,6 +496,12 @@ def create_note_front(title, content):
         return f" {title} <br /> <br /> --- <br /> {content} "
     else:
         return f" {title}"
+
+
+def contains_only_special_characters(s):
+    # 使用正则表达式检查字符串是否只包含特殊字符
+    pattern = r'^[!@#$%^&*()_+{}\[\]:;<>,.?~\\/\-|]+$'
+    return re.match(pattern, s.strip()) is not None
 
 
 def update_data(data):
@@ -543,7 +548,9 @@ def update_data(data):
         create_deck_if_need(deck_name)
 
         for note in notes_list:
-            front_value = create_note_front(note["front_title"], prepare_value(note["front_content"]))
+            front_value = create_note_front(note["front_title"], prepare_value(note["front_content"])).strip().strip("*")
+            if not front_value or contains_only_special_characters(front_value):
+                continue
             back_value = prepare_value(note["back_content"])
 
             # 从anki获取的卡片里去掉即将要更新的
