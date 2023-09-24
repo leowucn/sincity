@@ -207,14 +207,19 @@ def extract_image_src(str_data):
 
 def extract_image_info(md_image_info):
     def v1():
-        if not (
-                match := re.match(
-                    r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]",
-                    md_image_info,
-                )
-        ):
-            return None
-        return match["filename"]
+        nonlocal md_image_info
+        if "[[" in md_image_info:
+            md_image_info = "|".join(list(map(lambda x: x.strip(), md_image_info.split("|"))))
+            if not (
+                    match := re.match(
+                        r"!\[\[(?P<filename>[^\[\]|]+)(?:\|(?P<width>\d+))?\]\]",
+                        md_image_info,
+                    )
+            ):
+                return None
+            return match["filename"]
+        
+        return None
 
     def v2():
         pattern = r"!\[\]\((.*?)\)"
@@ -435,7 +440,9 @@ def prepare_value(answer):
     image_info_list.extend(re.findall(r"!\[\][\(\[].*?[\)\]]", answer))
 
     for raw_md_image_info in image_info_list:
+
         image_file_name = extract_image_info(raw_md_image_info)
+
         image_path = os.path.join(ROOT_IMAGE_PATH, image_file_name)
         image_url = store_media_file(image_path)
 
