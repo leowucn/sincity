@@ -101,7 +101,8 @@ def extract_content(file_path):
                 item = {
                     "front_title": front_title.lstrip("#").strip(),
                     "front_content": front_content,
-                    "back_content": back_content
+                    "back_content": back_content,
+                    "file_path": file_path
                 }
                 content_list.append(item)
 
@@ -491,11 +492,20 @@ def get_all_decks():
     return invoke("deckNames")
 
 
-def create_note_front(title, content):
+def create_note_front(title, content, file_path):
+    """创建卡片笔记标题
+
+    Args:
+        title (_type_): 原始标题
+        content (_type_): 原始内容
+        file_path (_type_): 数据源文件路径
+    """
+    title = f" {title} <br /> <br/> 文件源: {file_path.lstrip(OB_NOTE_PATH)}"
+
     if content:
-        return f" {title} <br /> <br /> --- <br /> {content} "
-    else:
-        return f" {title}"
+        title = f"{title} <br/><br/> {content}"
+    
+    return title
 
 
 def contains_only_special_characters(s):
@@ -548,7 +558,7 @@ def update_data(data):
         create_deck_if_need(deck_name)
 
         for note in notes_list:
-            front_value = create_note_front(note["front_title"], prepare_value(note["front_content"])).strip().strip("*")
+            front_value = create_note_front(note["front_title"], prepare_value(note["front_content"]), note["file_path"]).strip().strip("*")
             if not front_value or contains_only_special_characters(front_value):
                 continue
             back_value = prepare_value(note["back_content"])
