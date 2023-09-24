@@ -3,10 +3,10 @@
 
 import os
 import re
-
 import requests
 import json
 import base64
+
 
 START_FLAG = "<-s->"
 END_FLAG = "<-e->"
@@ -147,7 +147,7 @@ def extract_contents_from_dir(dir_path, level=1, parent_name=None, IGNORE_UPLOAD
     return results
 
 
-def check_file(file_path):
+def check_file_unmatched_tag(file_path):
     if not file_path.endswith(".md"):
         return
 
@@ -183,6 +183,30 @@ def check_file(file_path):
         raise RuntimeError(f"文件检查错误: {msg}")
 
 
+def check_empty_line_before_s(file_path):
+    if not file_path.endswith(".md"):
+        return
+
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+    
+    error_lines = []
+
+    for i in range(1, len(lines)):
+        current_line = lines[i].strip()
+        if current_line == "<-s->":
+            previous_line = lines[i - 1].strip()
+            if not previous_line:
+                error_lines.append(i)
+
+    if error_lines:
+        print("错误：以下行之前有空白行，请修正：")
+        for line_number in error_lines:
+            print(f"行号 {line_number}: {lines[line_number - 1].strip()}")
+        
+        raise RuntimeError(f"<-s->前空行检查错误, 文件路径 {file_path}") 
+
+
 def get_file_extension(file_name):
     if file_name.startswith("."):
         return file_name
@@ -201,7 +225,8 @@ def check_directory(directory, ignored_directories, ignore_upload_extensions_lis
             file_extension = get_file_extension(file)
             if file_extension not in ignore_upload_extensions_list:
                 file_path = os.path.join(root, file)
-                check_file(file_path)
+                check_file_unmatched_tag(file_path)
+                check_empty_line_before_s(file_path)
 
 
 def extract_image_src(str_data):
