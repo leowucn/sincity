@@ -19,7 +19,7 @@ ROOT_IMAGE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Doc
 # 忽略目录
 IGNORE_UPLOAD_DIRS = [".obsidian", ".trash"]
 # START_FLAG和END_FLAG标签时将忽略如下格式的文件
-IGNORE_UPLOAD_EXTENSIONS = [
+IGNORE_UPLOAD_EXTENSIONS = {
     ".DS_Store",
     ".jpeg",
     ".png",
@@ -38,7 +38,10 @@ IGNORE_UPLOAD_EXTENSIONS = [
     ".webm",
     ".mpg",
     ".3gp",
-]
+}
+
+VIDEO_FORMATS = {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".3gp"}
+
 
 
 def print_msg(msg, error):
@@ -186,7 +189,7 @@ def get_file_extension(file_name):
     return os.path.splitext(file_name)[1]
 
 
-def check_directory(directory, ignored_directories, IGNORE_UPLOAD_EXTENSIONS_list):
+def check_directory(directory, ignored_directories, ignore_upload_extensions_list):
     """
     检查目录中的md文件是否有没有匹配的 START_FLAG和END_FLAG标签
     """
@@ -196,7 +199,7 @@ def check_directory(directory, ignored_directories, IGNORE_UPLOAD_EXTENSIONS_lis
 
         for file in files:
             file_extension = get_file_extension(file)
-            if file_extension not in IGNORE_UPLOAD_EXTENSIONS_list:
+            if file_extension not in ignore_upload_extensions_list:
                 file_path = os.path.join(root, file)
                 check_file(file_path)
 
@@ -442,13 +445,21 @@ def prepare_value(answer):
     for raw_md_image_info in image_info_list:
 
         image_file_name = extract_image_info(raw_md_image_info)
+        if not image_file_name:
+            continue
 
-        image_path = os.path.join(ROOT_IMAGE_PATH, image_file_name)
-        image_url = store_media_file(image_path)
+        ext_format = os.path.splitext(image_file_name)[1]
+        if ext_format in VIDEO_FORMATS:
+            info = "<p style='color: red'> 视频格式文件忽略上传 </p>"
+            answer = answer.replace(raw_md_image_info, info)
+            print("已忽略视频文件: ", image_file_name)
+        else:
+            image_path = os.path.join(ROOT_IMAGE_PATH, image_file_name)
+            image_url = store_media_file(image_path)
 
-        img_tag = f"<img src='{image_url}'>"
+            img_tag = f"<img src='{image_url}'>"
 
-        answer = answer.replace(raw_md_image_info, img_tag)
+            answer = answer.replace(raw_md_image_info, img_tag)
     return answer
 
 
