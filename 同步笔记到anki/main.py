@@ -6,7 +6,7 @@ import re
 import requests
 import json
 import base64
-
+import hashlib
 
 START_FLAG = "<-s->"
 END_FLAG = "<-e->"
@@ -41,7 +41,6 @@ IGNORE_UPLOAD_EXTENSIONS = {
 }
 
 VIDEO_FORMATS = {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".3gp"}
-
 
 
 def print_msg(msg, error):
@@ -97,6 +96,8 @@ def extract_content(file_path):
             back_content = back_content.strip()
             back_content = back_content.replace("$", "")
             back_content = back_content.strip().replace("\n", "<br/>")
+
+            front_title = front_title.strip()
             if front_title and front_title not in ['````', 'title']:
                 item = {
                     "front_title": front_title.lstrip("#").strip(),
@@ -190,7 +191,7 @@ def check_empty_line_before_s(file_path):
 
     with open(file_path, 'r', encoding='utf-8') as file:
         lines = file.readlines()
-    
+
     error_lines = []
 
     for i in range(1, len(lines)):
@@ -204,8 +205,8 @@ def check_empty_line_before_s(file_path):
         print("错误：以下行之前有空白行，请修正：")
         for line_number in error_lines:
             print(f"行号 {line_number}: {lines[line_number - 1].strip()}")
-        
-        raise RuntimeError(f"<-s->前空行检查错误, 文件路径 {file_path}") 
+
+        raise RuntimeError(f"<-s->前空行检查错误, 文件路径 {file_path}")
 
 
 def get_file_extension(file_name):
@@ -247,7 +248,7 @@ def extract_image_info(md_image_info):
             ):
                 return None
             return match["filename"]
-        
+
         return None
 
     def v2():
@@ -455,6 +456,8 @@ def add_note(deck_name, front, back):
     err_msg = response.json()["error"]
     print_msg(f"添加笔记, 标题: {get_front_title(front)}", err_msg)
 
+    return err_msg
+
 
 def get_front_title(front_value):
     """
@@ -492,26 +495,43 @@ def get_all_decks():
     return invoke("deckNames")
 
 
-def create_note_front(title, content, file_path):
+def create_note_front(title, content, file_path, md5):
     """创建卡片笔记标题
 
     Args:
         title (_type_): 原始标题
         content (_type_): 原始内容
         file_path (_type_): 数据源文件路径
+        md5(str): md5
     """
-    title = f" {title} <br /> <br/> 文件源: {file_path.lstrip(OB_NOTE_PATH)}"
+    # title = f" {title} <br /> <br/> 文件源: {file_path.lstrip(OB_NOTE_PATH)}"
+    title = (f" {title} <br /> <br/> <p id='extra_info'>文件源: {file_path.lstrip(OB_NOTE_PATH)}<p> \n <p "
+             f"id='extra_info'>md5: {md5}<p>")
 
     if content:
         title = f"{title} <br/><br/> {content}"
-    
+
     return title
 
 
-def contains_only_special_characters(s):
-    # 使用正则表达式检查字符串是否只包含特殊字符
-    pattern = r'^[!@#$%^&*()_+{}\[\]:;<>,.?~\\/\-|]+$'
-    return re.match(pattern, s.strip()) is not None
+def calculate_sorted_dict_md5(input_dict):
+    sorted_keys = sorted(input_dict.keys())
+    sorted_str = ''.join(f'{key}{input_dict[key]}' for key in sorted_keys)
+    return hashlib.md5(sorted_str.encode()).hexdigest()
+
+
+def extract_md5_from_note_header(front_value):
+    # 使用正则表达式匹配MD5值的模式
+    md5_pattern = r'[0-9a-f]{32}'
+
+    # 在输入字符串中查找匹配的MD5值
+    md5_matches = re.findall(md5_pattern, front_value)
+
+    # 如果找到匹配项，返回第一个匹配的MD5值；否则返回None
+    if md5_matches:
+        return md5_matches[0]
+    else:
+        return None
 
 
 def update_data(data):
@@ -525,13 +545,11 @@ def update_data(data):
 
         deck_name_set.add(deck_name)
 
-    print("处理牌组----------------------------------------------------")
-    # 用于记录卡片的标题的map，方便判断是否已存在相同标题的卡片
-    front_m = {}
-    # 用于记录卡片的背面的map，方便判断是否已存在相同背面的卡片。如果卡面背面内容已变更则需要重新上传
-    back_m = {}
+    # md5是否已处理。防止同一个笔记因为在ob中被多次存放，导致这里要处理多次而执行出错
+    done = set()
 
     for deck_name in data:
+        print(f"处理牌组-----------------------------------------------{deck_name}")
         # 判断是否有多余牌组需要删除
         if deck_name in deck_name_set:
             deck_name_set.remove(deck_name)
@@ -542,56 +560,51 @@ def update_data(data):
                 tmp_deck_name_set.remove(dn)
         deck_name_set = tmp_deck_name_set.copy()
 
-        print("\n")
+        # 用于记录卡片的标题的map，方便判断是否已存在相同标题的卡片
+        anki_md5_dict = {}
+        anki_md5_to_header = {}
+
         deck_notes_list = find_notes_by_deck(deck_name)
 
         for note_info in deck_notes_list:
-            front_m[note_info["fields"]["Front"]["value"]] = note_info["noteId"]
-            back_m[note_info["fields"]["Back"]["value"]] = note_info["noteId"]
-
-        print(f"处理牌组 - <<{deck_name}>>")
-        for key in front_m:
-            print(f"<<{deck_name}>> 牌组已存在的笔记: {key.split('---')[0].strip()}")
+            md5 = extract_md5_from_note_header(note_info["fields"]["Front"]["value"])
+            anki_md5_dict[md5] = note_info["noteId"]
+            anki_md5_to_header[md5] = note_info["fields"]["Front"]["value"]
 
         notes_list = data[deck_name]
 
         create_deck_if_need(deck_name)
 
         for note in notes_list:
-            front_value = create_note_front(note["front_title"], prepare_value(note["front_content"]), note["file_path"]).strip().strip("*")
-            if not front_value or contains_only_special_characters(front_value):
-                continue
-            back_value = prepare_value(note["back_content"])
+            curr_note_md5 = calculate_sorted_dict_md5(note)
 
             # 从anki获取的卡片里去掉即将要更新的
-            if front_value in front_m and back_value in back_m:
-                print(f"该笔记需要保留: {get_front_title(front_value)}")
-                del front_m[front_value]
+            if curr_note_md5 in anki_md5_dict:
+                del anki_md5_dict[curr_note_md5]
+                done.add(curr_note_md5)
                 continue
 
-            notes_info_list = find_notes_by_front(front_value)
-            #
-            if len(notes_info_list) > 0:
-                for note_info in notes_info_list:
-                    if note_info["fields"]["Back"]["value"] != back_value:
-                        # 更新卡片之前先从anki删除卡片
-                        delete_note(note_info["noteId"])
-                        add_note(deck_name, front_value, back_value)
+            if curr_note_md5 in done:
+                continue
 
-                        # 如果采用更新的方式。修改后的卡片不会作为需要复习的
-                        # self.update_note_fields(card_info["note"], deck_name, note["header"], note["content"])
-            else:
-                add_note(deck_name, front_value, back_value)
+            front_value = create_note_front(
+                note["front_title"],
+                prepare_value(note["front_content"]),
+                note["file_path"],
+                calculate_sorted_dict_md5(note)
+            ).strip().strip("*")
+            back_value = prepare_value(note["back_content"])
 
-    print("\n\n处理需要删除的笔记----------------------------------------\n")
-    for header, note_id in front_m.items():
-        print(f"删除笔记: {get_front_title(header)}")
-        # 删除在od中已经不存在的笔记卡片
-        delete_note(note_id)
+            add_note(deck_name, front_value, back_value)
+            done.add(curr_note_md5)
 
-    print("\n\n删除多余牌组----------------------------------------------\n")
+        for md5, note_id in anki_md5_dict.items():
+            print(f"******删除笔记: {get_front_title(anki_md5_to_header[md5])}")
+            # 删除在od中已经不存在的笔记卡片
+            delete_note(note_id)
+
     for deck_name in deck_name_set:
-        print(f"删除牌组: {deck_name}")
+        print(f"+++++++++删除牌组: {deck_name}")
         # 删除在od中已经不存在的笔记卡片
         delete_deck(deck_name)
 
