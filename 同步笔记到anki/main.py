@@ -463,7 +463,7 @@ def get_front_title(front_value):
     """
     根据卡片的front获取标题。主要用于显示日志信息
     """
-    return front_value.strip().split('---')[0]
+    return front_value.strip().split('<br /> <br/>')[0]
 
 
 def prepare_value(answer):
