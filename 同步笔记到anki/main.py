@@ -64,6 +64,11 @@ def remove_prefix_from_string(s):
     return re.sub(pattern, "", s)
 
 
+def remove_special_chars(string):
+    # 使用正则表达式替换所有非字母、数字、空格和下划线的字符为空字符串
+    return re.sub(r'[^\w\s]', '', string).strip()
+
+
 def extract_content(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -99,13 +104,15 @@ def extract_content(file_path):
 
             front_title = front_title.strip()
             if front_title and front_title not in ['````', 'title']:
-                item = {
-                    "front_title": front_title.lstrip("#").strip(),
-                    "front_content": front_content,
-                    "back_content": back_content,
-                    "file_path": file_path
-                }
-                content_list.append(item)
+                title = remove_special_chars(front_title.lstrip("#").strip())
+                if title:
+                    item = {
+                        "front_title": front_title.lstrip("#").strip(),
+                        "front_content": front_content,
+                        "back_content": back_content,
+                        "file_path": file_path
+                    }
+                    content_list.append(item)
 
             front_title = ""
             front_content = ""
@@ -137,6 +144,34 @@ def extract_contents_from_dir(dir_path, level=1, parent_name=None, IGNORE_UPLOAD
                 IGNORE_UPLOAD_DIRS_list is None or os.path.basename(file_path) not in IGNORE_UPLOAD_DIRS_list
         ):
             sub_results = extract_contents_from_dir(
+                file_path,
+                level + 1,
+                os.path.basename(dir_path)
+                if parent_name is None
+                else f"{parent_name}::{os.path.basename(dir_path)}",
+                IGNORE_UPLOAD_DIRS_list=IGNORE_UPLOAD_DIRS_list,
+            )
+            if sub_results:
+                results |= sub_results
+    return results
+
+
+def extract_contents_from_dir_v2(dir_path, level=1, parent_name=None, IGNORE_UPLOAD_DIRS_list=None):
+    results = {}
+    for file in os.listdir(dir_path):
+        file_path = os.path.join(dir_path, file)
+        if os.path.isfile(file_path) and file.endswith(".md"):
+            if contents := extract_content(file_path):
+                dir_name = os.path.basename(os.path.dirname(file_path))
+                key = dir_name if level == 1 else f"{parent_name}::{dir_name}::{os.path.basename(file_path).strip('.md')}"
+                key = remove_whitespace(key)
+                if key not in results:
+                    results[key] = []
+                results[key].extend(contents)
+        elif os.path.isdir(file_path) and (
+                IGNORE_UPLOAD_DIRS_list is None or os.path.basename(file_path) not in IGNORE_UPLOAD_DIRS_list
+        ):
+            sub_results = extract_contents_from_dir_v2(
                 file_path,
                 level + 1,
                 os.path.basename(dir_path)
@@ -582,7 +617,14 @@ def update_data(data):
             if curr_note_md5 in anki_md5_dict:
                 del anki_md5_dict[curr_note_md5]
                 done.add(curr_note_md5)
-                continue
+
+        for md5, note_id in anki_md5_dict.items():
+            print(f"******删除笔记: {get_front_title(anki_md5_to_header[md5])}")
+            # 删除在od中已经不存在的笔记卡片
+            delete_note(note_id)
+
+        for note in notes_list:
+            curr_note_md5 = calculate_sorted_dict_md5(note)
 
             if curr_note_md5 in done:
                 continue
@@ -598,11 +640,6 @@ def update_data(data):
             add_note(deck_name, front_value, back_value)
             done.add(curr_note_md5)
 
-        for md5, note_id in anki_md5_dict.items():
-            print(f"******删除笔记: {get_front_title(anki_md5_to_header[md5])}")
-            # 删除在od中已经不存在的笔记卡片
-            delete_note(note_id)
-
     for deck_name in deck_name_set:
         print(f"+++++++++删除牌组: {deck_name}")
         # 删除在od中已经不存在的笔记卡片
@@ -611,5 +648,6 @@ def update_data(data):
 
 # 检查是否有未配对的标识符
 check_directory(OB_NOTE_PATH, IGNORE_UPLOAD_DIRS, IGNORE_UPLOAD_EXTENSIONS)
-notes = extract_contents_from_dir(OB_NOTE_PATH, IGNORE_UPLOAD_DIRS_list=IGNORE_UPLOAD_DIRS)
+# notes = extract_contents_from_dir(OB_NOTE_PATH, IGNORE_UPLOAD_DIRS_list=IGNORE_UPLOAD_DIRS)
+notes = extract_contents_from_dir_v2(OB_NOTE_PATH, IGNORE_UPLOAD_DIRS_list=IGNORE_UPLOAD_DIRS)
 update_data(notes)
