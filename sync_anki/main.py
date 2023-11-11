@@ -7,14 +7,27 @@ import requests
 import json
 import base64
 import hashlib
+import uuid
 
 START_FLAG = "<-s->"
 END_FLAG = "<-e->"
 ANKI_CONNECT = "http://localhost:8765"
 # 设置根牌组名称
-ROOT_DECK_NAME = "ob"
+ROOT_DECK_NAME = "碧海潮生"
 MODEL_NAME = "KaTex and Markdown Basic"
+
+WHITE_LIST_DECKS = [
+    "小学古诗大全_上涨网",
+    "成语大全",
+    "系统默认"
+]
+
 OB_NOTE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
+
+# OB_NOTE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/B/开发/笔记/算法/数据结构"
+# OB_NOTE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/B/开发/笔记"
+# OB_NOTE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/Test"
+
 ROOT_IMAGE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
 # 忽略目录
 IGNORE_UPLOAD_DIRS = [".obsidian", ".trash"]
@@ -104,8 +117,9 @@ def extract_content(file_path):
 
             front_title = front_title.strip()
             if front_title and front_title not in ['````', 'title']:
-                title = remove_special_chars(front_title.lstrip("#").strip())
-                if title:
+                if title := remove_special_chars(
+                    front_title.lstrip("#").strip()
+                ):
                     item = {
                         "front_title": front_title.lstrip("#").strip(),
                         "front_content": front_content,
@@ -331,7 +345,9 @@ def delete_media_file(media_file_name):
         "params": {"filename": media_file_name},
     }
     response = requests.post(ANKI_CONNECT, json=payload)
-    print_msg("删除图片或视频", response.json()["error"])
+    if err := response.json()["error"]:
+        raise RuntimeError(f"删除图片或视频失败, {media_file_name}, err: {err}")
+    print_msg(f"删除图片或视频: {media_file_name}", None)
 
 
 def get_cards_info(card_ids):
@@ -488,41 +504,112 @@ def add_note(deck_name, front, back):
         ),
     )
 
+    resp = response.json()
+
+    if err := resp["error"]:
+        raise RuntimeError(f"add 笔记出错 {err}, title: {get_title_from_note(front)}")
+
+    print_msg(f"add 笔记, 标题: {get_title_from_note(front)}", None)
+    return resp["result"]
+
+
+def update_note(note_id, front, back):
+    fields = {"Front": front, "Back": back}
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "updateNote",
+                "version": 6,
+                "params": {
+                    "note": {
+                        "id": note_id,
+                        "fields": fields,
+                        "tags": [],
+                    }
+                },
+            }
+        ),
+    )
+
     err_msg = response.json()["error"]
-    print_msg(f"添加笔记, 标题: {get_front_title(front)}", err_msg)
+    print_msg(f"update 笔记, 标题: {get_title_from_note(front)}", err_msg)
 
     return err_msg
 
+def extract_md5_from_note_header(front_value):
+    # 使用正则表达式匹配MD5值的模式
+    md5_pattern = r'[0-9a-f]{32}'
 
-def get_front_title(front_value):
-    """
-    根据卡片的front获取标题。主要用于显示日志信息
-    """
-    return front_value.strip().split('<br /> <br/>')[0]
+    if md5_matches := re.findall(md5_pattern, front_value):
+        return md5_matches[0]
+    else:
+        return None
 
+def extract_file_paths(text):
+    # 匹配形如 ![[...]], ![](...)
+    pattern = re.compile(r"\!\[\[.*?\]\]|\!\[\][\(\[].*?[\)\]]|\!\[.*?\]\([^\)]+\)")
+
+    # 使用正则表达式找到所有匹配项
+    image_info_list = pattern.findall(text)
+
+    # 提取文件路径
+    file_paths = []
+    for image_info in image_info_list:
+        if path_match := re.search(r"\(.*?\)|\[\[.*?\]\]", image_info):
+            file_path = path_match[0][1:-1]
+            if file_path_match := re.search(r"([^\s]+\.[^\s]+)", file_path):
+                file_path = file_path_match[1]
+                if file_path.startswith("["):
+                    file_path = file_path[1:]
+                if file_path.endswith("]"):
+                    file_path = file_path[:-1]
+                file_paths.append(file_path)
+
+    return file_paths
+
+def extract_image_tags(markdown_text):
+    # 匹配形如 ![[...]], ![](...)
+    pattern = re.compile(r"\!\[\[.*?\]\]|\!\[\][\(\[].*?[\)\]]|\!\[.*?\]\([^\)]+\)")
+
+    return pattern.findall(markdown_text)
+
+def modify_file_path(original_path):
+    if os.path.exists(original_path):
+        return original_path
+
+    # 提取原始路径的文件名部分
+    folder, file_name = os.path.split(original_path)
+
+    if file_name.startswith("Pasted"):
+        return os.path.join(folder, file_name)
+    return os.path.join(folder, f"Pasted image {file_name}")
 
 def prepare_value(answer):
-    image_info_list = re.findall(r"\!\[\[.*?\]\]", answer)
-    image_info_list.extend(re.findall(r"!\[\][\(\[].*?[\)\]]", answer))
+    image_info_list = extract_image_tags(answer)
 
-    for raw_md_image_info in image_info_list:
-
-        image_file_name = extract_image_info(raw_md_image_info)
+    for md_img_tag in image_info_list:
+        image_file_name_list = extract_file_paths(md_img_tag)
+        if not image_file_name_list:
+            continue
+        image_file_name = image_file_name_list[0]
         if not image_file_name:
             continue
 
         ext_format = os.path.splitext(image_file_name)[1]
         if ext_format in VIDEO_FORMATS:
             info = "<p style='color: red'> 视频格式文件忽略上传 </p>"
-            answer = answer.replace(raw_md_image_info, info)
+            answer = answer.replace(md_img_tag, info)
             print("已忽略视频文件: ", image_file_name)
         else:
             image_path = os.path.join(ROOT_IMAGE_PATH, image_file_name)
+            if not os.path.exists(image_path):
+                image_path = modify_file_path(image_path)
             image_url = store_media_file(image_path)
 
             img_tag = f"<img src='{image_url}'>"
 
-            answer = answer.replace(raw_md_image_info, img_tag)
+            answer = answer.replace(md_img_tag, img_tag)
     return answer
 
 
@@ -537,113 +624,95 @@ def create_note_front(title, content, file_path, md5):
         title (_type_): 原始标题
         content (_type_): 原始内容
         file_path (_type_): 数据源文件路径
-        md5(str): md5
+        md5 (str): md5
     """
-    # title = f" {title} <br /> <br/> 文件源: {file_path.lstrip(OB_NOTE_PATH)}"
-    title = (f" {title} <br /> <br/> <p id='extra_info'>文件源: {file_path.lstrip(OB_NOTE_PATH)}<p> \n <p "
-             f"id='extra_info'>md5: {md5}<p>")
-
+    title = (f" {title}<br/><br/> <p id='extra_info'>文件源: {file_path[len(OB_NOTE_PATH):]}<p> \n <p "
+            f"id='extra_info'>md5: {md5}<p>")
+    
     if content:
         title = f"{title} <br/><br/> {content}"
-
     return title
 
 
-def calculate_sorted_dict_md5(input_dict):
-    sorted_keys = sorted(input_dict.keys())
-    sorted_str = ''.join(f'{key}{input_dict[key]}' for key in sorted_keys)
-    return hashlib.md5(sorted_str.encode()).hexdigest()
-
-
-def extract_md5_from_note_header(front_value):
-    # 使用正则表达式匹配MD5值的模式
-    md5_pattern = r'[0-9a-f]{32}'
-
-    # 在输入字符串中查找匹配的MD5值
-    md5_matches = re.findall(md5_pattern, front_value)
-
-    # 如果找到匹配项，返回第一个匹配的MD5值；否则返回None
-    if md5_matches:
-        return md5_matches[0]
-    else:
-        return None
-
-
-def update_data(data):
-    # 从anki查询到的deck列表
+def get_all_valid_decks():
     deck_name_set = set()
 
     all_decks = get_all_decks()
     for deck_name in all_decks:
-        if not deck_name.startswith(ROOT_DECK_NAME):
+        if deck_name in WHITE_LIST_DECKS:
             continue
 
         deck_name_set.add(deck_name)
+    
+    return deck_name_set
 
-    # md5是否已处理。防止同一个笔记因为在ob中被多次存放，导致这里要处理多次而执行出错
-    done = set()
+def calculate_md5(input_string):
+    return hashlib.md5(input_string.encode()).hexdigest()
+
+def generate_short_uuid():
+    full_uuid = uuid.uuid4().hex
+    return full_uuid[:10]
+
+def get_title_from_note(front_value):
+    return front_value.split("<br/><br/>")[0]
+
+def update_data(data):
+    # 从anki查询到的deck列表，并且去掉了白名单中需要保存的牌组
+    curr_decks = get_all_valid_decks()
+
+    for deck_name in curr_decks.difference(set(data.keys())):
+        found = any(item.startswith(deck_name) for item in data.keys())
+        if not found:
+            print(f"删除牌组: {deck_name}")
+            delete_deck(deck_name)
 
     for deck_name in data:
-        print(f"处理牌组-----------------------------------------------{deck_name}")
-        # 判断是否有多余牌组需要删除
-        if deck_name in deck_name_set:
-            deck_name_set.remove(deck_name)
-
-        tmp_deck_name_set = deck_name_set.copy()
-        for dn in deck_name_set:
-            if deck_name.startswith(dn):
-                tmp_deck_name_set.remove(dn)
-        deck_name_set = tmp_deck_name_set.copy()
-
-        # 用于记录卡片的标题的map，方便判断是否已存在相同标题的卡片
-        anki_md5_dict = {}
-        anki_md5_to_header = {}
-
+        print(f"\n\n处理牌组: {deck_name}")
         deck_notes_list = find_notes_by_deck(deck_name)
 
+        anki_deck_note_md5_dict = {}
+
         for note_info in deck_notes_list:
-            md5 = extract_md5_from_note_header(note_info["fields"]["Front"]["value"])
-            anki_md5_dict[md5] = note_info["noteId"]
-            anki_md5_to_header[md5] = note_info["fields"]["Front"]["value"]
+            note_id = note_info["noteId"]
+            note_title = note_info["fields"]["Front"]["value"]
+            note_md5 = extract_md5_from_note_header(note_info["fields"]["Front"]["value"])
+            anki_deck_note_md5_dict[note_md5] = {
+                "noteId": note_id,
+                "title": note_title,
+            }
 
+        # 当前牌组中的卡片列表
         notes_list = data[deck_name]
-
         create_deck_if_need(deck_name)
 
-        for note in notes_list:
-            curr_note_md5 = calculate_sorted_dict_md5(note)
-
-            # 从anki获取的卡片里去掉即将要更新的
-            if curr_note_md5 in anki_md5_dict:
-                del anki_md5_dict[curr_note_md5]
-                done.add(curr_note_md5)
-
-        for md5, note_id in anki_md5_dict.items():
-            print(f"******删除笔记: {get_front_title(anki_md5_to_header[md5])}")
-            # 删除在od中已经不存在的笔记卡片
-            delete_note(note_id)
+        ob_deck_notes_md5_set = set()
+        curr_note = {}
 
         for note in notes_list:
-            curr_note_md5 = calculate_sorted_dict_md5(note)
-
-            if curr_note_md5 in done:
-                continue
+            print(f"处理笔记: {note['front_title']}")
+            note_md5 = calculate_md5(note["back_content"])
+            ob_deck_notes_md5_set.add(note_md5)
 
             front_value = create_note_front(
                 note["front_title"],
                 prepare_value(note["front_content"]),
                 note["file_path"],
-                calculate_sorted_dict_md5(note)
+                note_md5,
             ).strip().strip("*")
             back_value = prepare_value(note["back_content"])
 
-            add_note(deck_name, front_value, back_value)
-            done.add(curr_note_md5)
+            curr_note[note_md5] = {
+                    "front": front_value,
+                    "back": back_value,
+                }
 
-    for deck_name in deck_name_set:
-        print(f"+++++++++删除牌组: {deck_name}")
-        # 删除在od中已经不存在的笔记卡片
-        delete_deck(deck_name)
+        for md5 in set(anki_deck_note_md5_dict).difference(ob_deck_notes_md5_set):
+            # 删除笔记
+            delete_note(anki_deck_note_md5_dict[md5]["noteId"])
+
+        for md5 in ob_deck_notes_md5_set.difference(set(anki_deck_note_md5_dict)):
+            item = curr_note[md5]
+            add_note(deck_name, item["front"], item["back"])
 
 
 # 检查是否有未配对的标识符
