@@ -382,25 +382,9 @@ def _find_notes(query):
     return notes
 
 
-def find_notes_by_front(front):
-    query = f'front:"{front}"'
-    return _find_notes(query)
-
-
 def find_notes_by_deck(deck_name):
     query = f'deck:"{deck_name}" -deck:"{deck_name}::*"'
     return _find_notes(query)
-
-
-def find_cards_by_front(front):
-    response = _find_cards("front:", front)
-    print_msg("查询卡片列表", response.json()["error"])
-
-    # check if the request was successful
-    if response.status_code != 200:
-        raise RuntimeError(response)
-
-    return response.json()["result"]
 
 
 def find_cards_by_deck(deck_name):
@@ -512,30 +496,6 @@ def add_note(deck_name, front, back):
     print_msg(f"add 笔记, 标题: {get_title_from_note(front)}", None)
     return resp["result"]
 
-
-def update_note(note_id, front, back):
-    fields = {"Front": front, "Back": back}
-    response = requests.post(
-        ANKI_CONNECT,
-        json.dumps(
-            {
-                "action": "updateNote",
-                "version": 6,
-                "params": {
-                    "note": {
-                        "id": note_id,
-                        "fields": fields,
-                        "tags": [],
-                    }
-                },
-            }
-        ),
-    )
-
-    err_msg = response.json()["error"]
-    print_msg(f"update 笔记, 标题: {get_title_from_note(front)}", err_msg)
-
-    return err_msg
 
 def extract_md5_from_note_header(front_value):
     # 使用正则表达式匹配MD5值的模式
