@@ -1,0 +1,65 @@
+
+.card {
+  font-family: 'Microsoft YaHei', sans-serif;
+
+	color: black;
+  background-color: #e4d2b9
+}
+table, th, td {
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+#back, #extra {
+	visibility: hidden;
+	text-align: left;
+}
+
+#front {
+	text-align: center;
+  font-size: 20px;
+}
+
+#extra_info {
+	color: green;
+	font-size: 14.5px;
+	text-align: left;
+}
+
+pre code {
+  border: 1px solid #999;
+  display: block;
+  padding: 20px;
+  overflow: auto;
+	font-family: monaco;
+}
+
+
+/* 标题样式 */
+h1 {
+  color: #FBA61C;
+}
+
+h2 {
+  color: #F2453F;
+}
+
+h3 {
+  color: #5096F4; 
+}
+
+h4 {
+  color: #36BA77; 
+}
+
+h5 {
+  color: #DB6363; 
+}
+
+h6 {
+  color: #F4C4F5; 
+}
+
+strong {
+  color: #d85fa7;
+}
+
