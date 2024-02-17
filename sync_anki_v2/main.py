@@ -11,7 +11,8 @@ from utils import *
 
 
 def sync():
-    file_path_list, all_paths = get_files()
+    file_path_list, all_paths, update_record_file = get_files()
+
     # 调整文件内容。比如自动增加uuid行
     adjust_files(file_path_list)
 
@@ -31,6 +32,9 @@ def sync():
         data_original_deck_list.append(path_to_double_colon(file_path))
 
     update_anki(blocks, data_original_deck_list)
+
+    # 所有操作执行成功后再更新 data/file_record.json文件
+    update_record_file()
 
 
 if __name__ == '__main__':

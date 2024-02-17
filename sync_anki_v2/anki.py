@@ -455,29 +455,19 @@ def _delete_deck_note(data, deck_list_from_file_paths):
 
 
 def _add_deck_note(data):
+    # 保存当前anki所有卡片的uuid
+    uuid_set = set()
+    for anki_deck_name in _get_all_valid_decks():
+        for anki_note in _find_notes_by_deck(anki_deck_name):
+            anki_note_uuid = extract_value_from_str(anki_note["fields"]["Front"]["value"], "uuid")
+            uuid_set.add(anki_note_uuid)
+
     for data_deck, data_note_list in data.items():
         print(f"\n\n处理牌组: {data_deck}")
         _create_deck_if_need(data_deck)
 
         for data_note in data_note_list:
-            found_in_anki_deck = False
-
-            # 在anki所有卡片中寻找。如果找不到则新建
-            for anki_deck_name in _get_all_valid_decks():
-                anki_note_list = _find_notes_by_deck(anki_deck_name)
-                if not anki_note_list:
-                    continue
-
-                for anki_note in anki_note_list:
-                    anki_note_uuid = extract_value_from_str(anki_note["fields"]["Front"]["value"], "uuid")
-                    if anki_note_uuid == data_note["uuid"]:
-                        found_in_anki_deck = True
-                        break
-
-                if found_in_anki_deck:
-                    break
-
-            if not found_in_anki_deck:
+            if data_note["uuid"] not in uuid_set:
                 # 需要新增
                 front_value, back_value = create_card_front_and_back(data_note)
                 _add_note(data_deck, front_value, back_value)

@@ -54,7 +54,7 @@ def read_json_file(file_path):
     except FileNotFoundError:
         raise FileNotFoundError(file_path)
     except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(e, file_path)
+        raise json.JSONDecodeError(f"error: {e}, file_path: {file_path}")
     except Exception as e:
         raise Exception(e, file_path)
 
@@ -77,8 +77,11 @@ def get_file_lines(file_path, encoding='utf-8'):
     """
     获取文件行列表
     """
-    with open(file_path, 'r', encoding=encoding) as file:
-        return file.readlines()
+    try:
+        with open(file_path, 'r', encoding=encoding) as file:
+            return file.readlines()
+    except UnicodeDecodeError as e:
+        raise Exception(f"error: {e}, file_path: {file_path}")
 
 
 def get_file_extension(file_path):

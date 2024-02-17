@@ -23,7 +23,7 @@ OB_NOTE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Docume
 ROOT_IMAGE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
 
 # 忽略如下目录中数据的处理
-IGNORE_UPLOAD_DIRS = [".obsidian", ".trash"]
+IGNORE_UPLOAD_DIRS = [".obsidian", ".trash", ".DS_Store"]
 # START_FLAG和END_FLAG标签时将忽略如下格式的文件
 IGNORE_UPLOAD_EXTENSIONS = {
     ".DS_Store", ".jpeg", ".jpg", ".webp", ".avif", ".png", ".gif", ".bmp",

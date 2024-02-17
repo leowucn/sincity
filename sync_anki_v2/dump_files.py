@@ -38,10 +38,15 @@ def _get_current_data(path_list):
 def _get_old_data():
     od = {}
 
-    # if os.path.isfile(record_path):
-    #     od = read_json_file(record_path)
+    if os.path.isfile(record_path):
+        od = read_json_file(record_path)
 
-    return od
+    res = {}
+    for file_path, timestamp in od.items():
+        if os.path.isfile(file_path):
+            res[file_path] = timestamp
+
+    return res
 
 
 def get_files():
@@ -50,19 +55,26 @@ def get_files():
     old_data = _get_old_data()
     new_data = _get_current_data([OB_NOTE_PATH])
 
+    print("aa00--------------old_data = ", old_data)
+    print("aa11--------------new_data = ", new_data)
+
     new_data1 = new_data.copy()
 
     need_handle_file_paths = []
     for key in merge_and_filter(old_data, new_data):
         need_handle_file_paths.append(key)
 
-    with open(record_path, 'w') as json_file:
-        # 使用json.dump将字典写入文件
-        json.dump(new_data1, json_file)
+    def update_record_file():
+        with open(record_path, 'w') as json_file:
+            # 使用json.dump将字典写入文件
+            json.dump(new_data1, json_file)
 
     all_path = list(new_data.keys())
 
-    return need_handle_file_paths, all_path
+    print("aa22-------------need_handle_file_paths = ", need_handle_file_paths)
+    print("aa33-------------all_path = ", all_path)
+
+    return need_handle_file_paths, all_path, update_record_file
 
 # 调用示例
 # ./dump_files.py "/dir/path1" "/dir/path2"
