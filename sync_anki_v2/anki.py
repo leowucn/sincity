@@ -450,17 +450,15 @@ def _delete_deck_note(data, deck_list_from_file_paths):
 def _add_deck_note(data):
     # 保存当前anki所有卡片的uuid
     uuid_set = set()
-    for anki_deck_name in _get_all_valid_decks():
+    for anki_deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
         for anki_note in _find_notes_by_deck(anki_deck_name):
             anki_note_uuid = extract_value_from_str(anki_note["fields"]["Front"]["value"], "uuid")
             if anki_note_uuid in uuid_set:
-                raise Exception("不允许笔记中出现重复的uuid")
+                raise Exception(f"不允许笔记中出现重复的uuid, uuid: {anki_note_uuid}")
             uuid_set.add(anki_note_uuid)
 
     for data_deck, data_note_list in data.items():
         print(f"\n\n处理牌组: {data_deck}")
-        _create_deck_if_need(data_deck)
-
         for data_note in data_note_list:
             if data_note["uuid"] not in uuid_set:
                 # 需要新增
@@ -469,31 +467,25 @@ def _add_deck_note(data):
 
 
 def _change_deck_note(data):
-    for data_deck in data:
-        _create_deck_if_need(data_deck)
-
-    data_note_uuid_to_deck = {}
+    data_uuid_to_deck = {}
     for data_deck, data_note_list in data.items():
         for data_note in data_note_list:
-            if data_note["uuid"] in data_note_uuid_to_deck:
+            if data_note["uuid"] in data_uuid_to_deck:
                 raise Exception("不允许笔记中出现重复uuid")
-            data_note_uuid_to_deck[data_note["uuid"]] = data_deck
+            data_uuid_to_deck[data_note["uuid"]] = data_deck
 
     for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
-
         for deck_note in _find_notes_by_deck(anki_deck):
-            note_id = deck_note["noteId"]
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
 
-            data_deck = data_note_uuid_to_deck[deck_note_uuid]
-            if deck_note_uuid in data_note_uuid_to_deck and data_deck != anki_deck:
-                _change_deck(data_deck, [note_id])
+            data_deck = data_uuid_to_deck[deck_note_uuid]
+            if deck_note_uuid in data_uuid_to_deck and data_deck != anki_deck:
+                _change_deck(data_deck, [deck_note["noteId"]])
 
 
 def _update_deck_note(data):
     for data_deck, data_note_list in data.items():
         print(f"\n\n处理牌组: {data_deck}")
-        _create_deck_if_need(data_deck)
 
         cache = {}
         for deck_note in _find_notes_by_deck(data_deck):
@@ -519,6 +511,9 @@ def update_anki(block_list, data_original_deck_list):
         if deck not in data:
             data[deck] = []
         data[deck].append(block)
+
+    for data_deck in data:
+        _create_deck_if_need(data_deck)
 
     _change_deck_note(data)
     _add_deck_note(data)
