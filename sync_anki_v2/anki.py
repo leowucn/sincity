@@ -423,6 +423,11 @@ def _delete_deck_note(data, deck_list_from_file_paths):
     for deck_name in set(deck_list_from_file_paths).difference(set(data.keys())):
         _delete_deck(deck_name)
 
+    cache = set()
+    for data_deck, data_note_list in data.items():
+        for data_note in data_note_list:
+            cache.add(data_note["uuid"])
+
     # 从anki查询到的deck列表，去掉了忽略牌组和前缀牌组
     anki_deck_list = _remove_prefix_deck_name(_get_all_valid_decks())
 
@@ -432,21 +437,9 @@ def _delete_deck_note(data, deck_list_from_file_paths):
             continue
 
         for deck_note in _find_notes_by_deck(anki_deck):
-            note_id = deck_note["noteId"]
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
-            # 全局寻找的目的是防止某些卡片被移动到了其他deck中
-            # 如果到处都找不到则可以删除
-            found_in_anywhere = False
-
-            for data_deck, data_note_list in data.items():
-                for data_note in data_note_list:
-                    if deck_note_uuid == data_note["uuid"]:
-                        found_in_anywhere = True
-                        break
-                if found_in_anywhere:
-                    break
-            if not found_in_anywhere:
-                _delete_note(note_id)
+            if deck_note_uuid not in cache:
+                _delete_note(deck_note["noteId"])
 
     # 删除没有卡片的空deck
     for deck_name in anki_deck_list:
@@ -460,6 +453,8 @@ def _add_deck_note(data):
     for anki_deck_name in _get_all_valid_decks():
         for anki_note in _find_notes_by_deck(anki_deck_name):
             anki_note_uuid = extract_value_from_str(anki_note["fields"]["Front"]["value"], "uuid")
+            if anki_note_uuid in uuid_set:
+                raise Exception("不允许笔记中出现重复的uuid")
             uuid_set.add(anki_note_uuid)
 
     for data_deck, data_note_list in data.items():
@@ -474,35 +469,25 @@ def _add_deck_note(data):
 
 
 def _change_deck_note(data):
+    for data_deck in data:
+        _create_deck_if_need(data_deck)
+
+    data_note_uuid_to_deck = {}
+    for data_deck, data_note_list in data.items():
+        for data_note in data_note_list:
+            if data_note["uuid"] in data_note_uuid_to_deck:
+                raise Exception("不允许笔记中出现重复uuid")
+            data_note_uuid_to_deck[data_note["uuid"]] = data_deck
+
     for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
+
         for deck_note in _find_notes_by_deck(anki_deck):
             note_id = deck_note["noteId"]
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
 
-            found_in_curr_deck = False
-
-            if anki_deck in data:
-                for data_note in data[anki_deck]:
-                    if deck_note_uuid == data_note["uuid"]:
-                        found_in_curr_deck = True
-                        break
-
-            if not found_in_curr_deck:
-                # 如果没有找到，有可能这个卡片被移动到了其他笔记中
-                found_in_other_deck = False
-
-                for data_deck, data_note_list in data.items():
-                    if data_deck == anki_deck:
-                        continue
-                    _create_deck_if_need(data_deck)
-                    for data_note in data_note_list:
-                        # 如果找到了，说说明执卡片被移动到了新的deck
-                        if data_note["uuid"] == deck_note_uuid:
-                            _change_deck(data_deck, [note_id])
-                            found_in_other_deck = True
-                            break
-                    if found_in_other_deck:
-                        break
+            data_deck = data_note_uuid_to_deck[deck_note_uuid]
+            if deck_note_uuid in data_note_uuid_to_deck and data_deck != anki_deck:
+                _change_deck(data_deck, [note_id])
 
 
 def _update_deck_note(data):
@@ -510,16 +495,21 @@ def _update_deck_note(data):
         print(f"\n\n处理牌组: {data_deck}")
         _create_deck_if_need(data_deck)
 
-        for data_note in data_note_list:
-            for deck_note in _find_notes_by_deck(data_deck):
-                deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5")
-                deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
+        cache = {}
+        for deck_note in _find_notes_by_deck(data_deck):
+            deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5")
+            deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
+            cache[deck_note_uuid] = {
+                "note_id": deck_note["noteId"],
+                "md5": deck_note_md5
+            }
 
-                if deck_note_uuid == data_note["uuid"] and deck_note_md5 != data_note["md5"]:
-                    front_value, back_value = create_card_front_and_back(data_note)
-                    # 需要更新
-                    _update_note(deck_note["noteId"], front_value, back_value)
-                    break
+        for data_note in data_note_list:
+            if data_note["uuid"] in cache and data_note["md5"] != cache[data_note["uuid"]]["md5"]:
+                front_value, back_value = create_card_front_and_back(data_note)
+                # 需要更新
+                _update_note(cache[data_note["uuid"]]["note_id"], front_value, back_value)
+                break
 
 
 def update_anki(block_list, data_original_deck_list):
