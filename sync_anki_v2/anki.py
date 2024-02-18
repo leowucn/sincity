@@ -458,7 +458,6 @@ def _add_deck_note(data):
             uuid_set.add(anki_note_uuid)
 
     for data_deck, data_note_list in data.items():
-        print(f"\n\n处理牌组: {data_deck}")
         for data_note in data_note_list:
             if data_note["uuid"] not in uuid_set:
                 # 需要新增
@@ -478,15 +477,12 @@ def _change_deck_note(data):
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
 
-            data_deck = data_uuid_to_deck[deck_note_uuid]
-            if deck_note_uuid in data_uuid_to_deck and data_deck != anki_deck:
-                _change_deck(data_deck, [deck_note["noteId"]])
+            if deck_note_uuid in data_uuid_to_deck and data_uuid_to_deck[deck_note_uuid] != anki_deck:
+                _change_deck(data_uuid_to_deck[deck_note_uuid], [deck_note["noteId"]])
 
 
 def _update_deck_note(data):
     for data_deck, data_note_list in data.items():
-        print(f"\n\n处理牌组: {data_deck}")
-
         cache = {}
         for deck_note in _find_notes_by_deck(data_deck):
             deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5")
@@ -501,7 +497,6 @@ def _update_deck_note(data):
                 front_value, back_value = create_card_front_and_back(data_note)
                 # 需要更新
                 _update_note(cache[data_note["uuid"]]["note_id"], front_value, back_value)
-                break
 
 
 def update_anki(block_list, data_original_deck_list):
@@ -513,6 +508,7 @@ def update_anki(block_list, data_original_deck_list):
         data[deck].append(block)
 
     for data_deck in data:
+        print(f"处理牌组: {data_deck}")
         _create_deck_if_need(data_deck)
 
     _change_deck_note(data)

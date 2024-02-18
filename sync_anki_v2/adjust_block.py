@@ -35,7 +35,7 @@ def adjust_block(block):
     """
     优化卡片块的格式。修改字段内容格式，或者增加字段
     """
-    block["back_content"] = second_delimiter_for_card() + block["back_content"] + "<br><br>" + third_delimiter_for_card()
+    block["back_content"] = second_delimiter_for_card() + "\n---\n" + block["back_content"] + "<br><br>" + third_delimiter_for_card()
 
     md5_val = _cal_md5_for_block(block)
     block["md5"] = md5_val

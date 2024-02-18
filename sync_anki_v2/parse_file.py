@@ -192,6 +192,17 @@ def _trim_lines(lines):
     return []
 
 
+def _trim_uuid_line(lines):
+    """
+    uuid行不需要在anki中显示
+    """
+    for index in range(len(lines) - 1, -1, -1):
+        if UUID_FLAG in lines[index]:
+            lines.pop(index)
+            break
+    return lines
+
+
 def _parse_block(block):
     """
     解析block
@@ -235,6 +246,7 @@ def _add_meta_info(file_path, blocks):
         uuid = _find_block_uuid(file_path, block)
         title_path = _find_title_path(block[0][0], lines, code_blocks)
         front_title, front_content, back_content = _parse_block(block)
+        back_content = _trim_uuid_line(back_content)
         res.append({
             # front_title不允许重复，如果重复则报错
             "front_title": front_title,
