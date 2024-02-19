@@ -497,7 +497,7 @@ def _update_deck_note(data):
                 _update_note(cache[data_note["uuid"]]["note_id"], front_value, back_value)
 
 
-def update_anki(block_list, data_original_deck_list):
+def change_deck_note(block_list):
     data = {}
     for block in block_list:
         deck = block["deck"]
@@ -510,6 +510,49 @@ def update_anki(block_list, data_original_deck_list):
         _create_deck_if_need(data_deck)
 
     _change_deck_note(data)
+
+
+def add_deck_note(block_list):
+    data = {}
+    for block in block_list:
+        deck = block["deck"]
+        if deck not in data:
+            data[deck] = []
+        data[deck].append(block)
+
+    for data_deck in data:
+        print(f"处理牌组: {data_deck}")
+        _create_deck_if_need(data_deck)
+
     _add_deck_note(data)
+
+
+def update_deck_note(block_list):
+    data = {}
+    for block in block_list:
+        deck = block["deck"]
+        if deck not in data:
+            data[deck] = []
+        data[deck].append(block)
+
+    for data_deck in data:
+        print(f"处理牌组: {data_deck}")
+        _create_deck_if_need(data_deck)
+
     _update_deck_note(data)
+
+
+def delete_deck_note(block_list, data_original_deck_list):
+    data = {}
+    for block in block_list:
+        deck = block["deck"]
+        if deck not in data:
+            data[deck] = []
+        data[deck].append(block)
+
+    for data_deck in data:
+        print(f"处理牌组: {data_deck}")
+        _create_deck_if_need(data_deck)
+
     _delete_deck_note(data, data_original_deck_list)
+

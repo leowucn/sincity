@@ -37,4 +37,4 @@ def get_files():
     return path_list
 
 # 调用示例
-# ./dump_files.py "/dir/path1" "/dir/path2"
+# ./get_files.py "/dir/path1" "/dir/path2"

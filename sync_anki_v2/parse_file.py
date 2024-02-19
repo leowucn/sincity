@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from utils import *
 from const import *
+from get_files import get_files
 
 
 def _get_blocks(file_path):
@@ -68,7 +69,64 @@ def _get_blocks(file_path):
             if END_FLAG in line:
                 raise Exception(f"不允许嵌套块结束标记. 内容: {line}")
 
-    return blocks
+    return _add_meta_info(file_path, blocks)
+
+
+def _get_backend_value(block_lines):
+    return second_delimiter_for_card() + "\n---\n" + "\n".join(block_lines) + "<br><br>" + third_delimiter_for_card()
+
+
+def _add_meta_info(file_path, blocks):
+    lines = get_file_lines(file_path)
+    code_blocks = _get_code_blocks(lines)
+
+    res = []
+    for block in blocks:
+        uuid_str = _find_block_uuid(file_path, block)
+        title_path = _find_title_path(block[0][0], lines, code_blocks)
+        front_title, front_lines, back_lines = _parse_block(block)
+        back_lines = _trim_uuid_line(back_lines)
+
+        item = {
+            # front_title不允许重复，如果重复则报错
+            "front_title": front_title,
+            "front_content": "\n".join(front_lines),
+            "back_content": _get_backend_value(back_lines),
+            "title_path": title_path,
+            "file_path": file_path,
+            "deck": path_to_double_colon(file_path),
+            "uuid": uuid_str,
+        }
+        item["md5"] = _cal_md5_for_block(item)
+        item["front_meta_info"] = _create_note_front(
+            item["front_title"],
+            item["file_path"],
+            item["title_path"],
+            item["md5"],
+            item["uuid"]
+        )
+
+        res.append(item)
+
+    return res
+
+
+def _create_note_front(title, file_path, title_path, md5, uuid_str):
+    """创建卡片笔记标题
+
+    Args:
+        title (_type_): 原始标题
+        file_path (_type_): 数据源文件路径
+        title_path (list): 标题路径
+        md5 (str): md5
+    """
+    return (
+        f"{title}<br/><br/>"
+        f"<p class='extra_info'>文件源: {file_path[len(OB_NOTE_PATH):]}</p> <br/><br/>"
+        f"<p class='extra_info'>标题路径: {' <- '.join(title_path)} </p> <br/><br/>"
+        f"<p class='hide'>uuid: {uuid_str}<p>"
+        f"<p class='hide'>md5: {md5}<p>"
+    )
 
 
 def _get_code_blocks(lines):
@@ -237,58 +295,27 @@ def _parse_block(block):
     return front_title, front_content, back_content
 
 
-def _add_meta_info(file_path, blocks):
-    lines = get_file_lines(file_path)
-    code_blocks = _get_code_blocks(lines)
-
-    res = []
-    for block in blocks:
-        uuid = _find_block_uuid(file_path, block)
-        title_path = _find_title_path(block[0][0], lines, code_blocks)
-        front_title, front_content, back_content = _parse_block(block)
-        back_content = _trim_uuid_line(back_content)
-        res.append({
-            # front_title不允许重复，如果重复则报错
-            "front_title": front_title,
-            "front_content": "\n".join(front_content),
-            "back_content": "\n".join(back_content),
-            "title_path": title_path,
-            "file_path": file_path,
-            "uuid": uuid
-        })
-
-    m = {}
-    for index in range(len(res)):
-        if res[index]["file_path"] in m:
-            res[index]["deck"] = m[res[index]["file_path"]]
-        else:
-            deck = path_to_double_colon(res[index]["file_path"])
-            m[res[index]["file_path"]] = deck
-
-            res[index]["deck"] = deck
-    return res
+def _cal_md5_for_block(block):
+    """
+    对block计算md5
+    """
+    json_data = json.dumps(block, sort_keys=True)
+    return hashlib.md5(json_data.encode()).hexdigest()
 
 
-def get_blocks(file_path):
+def get_blocks():
     """
     获取卡片块
-
-    返回的格式如下：
-    [
-        {
-            "front_title": "标题",
-            "front_content": "正面内容",
-            "back_content": "背面内容",
-            "title_path": "h3 -> h2 -> h1",
-            "md5": "ijwfowi2",
-            "file_path": "a/b/c",
-            "deck": "a::c:d",
-            "uuid": "xvwfwef2"
-        }
-    ]
     """
-    blocks = _get_blocks(file_path)
-    return _add_meta_info(file_path, blocks)
+    path_list = get_files()
+
+    blocks = []
+
+    for file_path in path_list:
+        blocks_of_file = _get_blocks(file_path)
+        blocks.extend(blocks_of_file)
+
+    return blocks
 
 # 调用示例
 # py3 ./parse_file.py "./abc/w.md"

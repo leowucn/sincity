@@ -14,7 +14,7 @@ UUID_FLAG = "wpx"
 
 WHITE_LIST_DECKS = ["系统默认"]
 ANKI_CONNECT = "http://localhost:8765"
-MODEL_NAME = "KaTex and Markdown Basic"
+MODEL_NAME = "KaTeX and Markdown Basic"
 ATTACHMENT_DIR = "资产"
 # 视频格式
 VIDEO_FORMATS = {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".3gp"}
