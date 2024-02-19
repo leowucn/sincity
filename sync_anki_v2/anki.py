@@ -166,7 +166,6 @@ def _create_deck_if_need(deck_name):
         _print_msg(f"创建牌组, 牌组名称: {deck_name}", response.json()["error"])
 
 
-
 def _delete_deck(deck_name):
     _delete_all_images_of_deck(deck_name)
     _delete_deck_itself(deck_name)
@@ -428,7 +427,6 @@ def _delete_deck_note(data, deck_list_from_file_paths):
         for data_note in data_note_list:
             cache.add(data_note["uuid"])
 
-    # 从anki查询到的deck列表，去掉了忽略牌组和前缀牌组
     anki_deck_list = _remove_prefix_deck_name(_get_all_valid_decks())
 
     for anki_deck in anki_deck_list:

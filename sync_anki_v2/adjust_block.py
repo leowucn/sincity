@@ -5,7 +5,7 @@ from utils import *
 from const import *
 
 
-def _create_note_front(title, file_path, title_path, md5, uuid):
+def _create_note_front(title, file_path, title_path, md5, uuid_str):
     """创建卡片笔记标题
 
     Args:
@@ -18,8 +18,8 @@ def _create_note_front(title, file_path, title_path, md5, uuid):
         f"{title}<br/><br/>"
         f"<p class='extra_info'>文件源: {file_path[len(OB_NOTE_PATH):]}</p> <br/><br/>"
         f"<p class='extra_info'>标题路径: {' <- '.join(title_path)} </p> <br/><br/>"
-        f"<p class='extra_info'>uuid: {uuid}<p>"
-        f"<p class='extra_info'>md5: {md5}<p>"
+        f"<p class='hide'>uuid: {uuid_str}<p>"
+        f"<p class='hide'>md5: {md5}<p>"
     )
 
 

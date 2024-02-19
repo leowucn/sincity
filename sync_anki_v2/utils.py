@@ -3,8 +3,7 @@
 import hashlib
 import os
 import json
-import random
-import string
+import uuid
 import shutil
 import re
 
@@ -204,17 +203,9 @@ def trim_blocks(blocks):
     return res
 
 
-def generate_uuid(length=5):
-    """
-    使用数字加大小写字母生成uuid
-    """
-    # 定义生成字符串的字符集
-    characters = string.ascii_letters + string.digits
-
-    # 使用 random.choices 从字符集中随机选择字符，生成指定长度的字符串
-    random_string = ''.join(random.choices(characters, k=length))
-
-    return random_string
+def generate_uuid():
+    # 生成一个随机 UUID
+    return str(uuid.uuid4()).replace("-", "")
 
 
 def get_uuid_line(uuid):
