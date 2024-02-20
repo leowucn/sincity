@@ -130,7 +130,7 @@ def _create_note_front(title, file_path, title_path, uuid_str):
     return (
         f"{title}<br/><br/>" +
         f"<p class='extra_info'>✈️ {file_path[len(OB_NOTE_PATH):]}</p>" +
-        "🌾 " + "🌕".join(get_title_path_str(title_path)) + "\n" +
+        "🥕".join(get_title_path_str(title_path)) + "\n" +
         f"<p class='hide'>uuid: {uuid_str}<p>" +
         f"<p class='hide'>md5: md5_str <p>"
     )
