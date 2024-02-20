@@ -97,35 +97,42 @@ def _add_meta_info(file_path, blocks):
             "deck": path_to_double_colon(file_path),
             "uuid": uuid_str,
         }
-        item["md5"] = _cal_md5_for_block(item)
         item["front_meta_info"] = _create_note_front(
             item["front_title"],
             item["file_path"],
             item["title_path"],
-            item["md5"],
             item["uuid"]
         )
+        md5_str = _cal_md5_for_block(item)
+        item["front_meta_info"] = item["front_meta_info"].replace("md5_str", md5_str)
+        item["md5"] = md5_str
 
         res.append(item)
 
     return res
 
 
-def _create_note_front(title, file_path, title_path, md5, uuid_str):
+def _create_note_front(title, file_path, title_path, uuid_str):
     """创建卡片笔记标题
 
     Args:
         title (_type_): 原始标题
         file_path (_type_): 数据源文件路径
         title_path (list): 标题路径
-        md5 (str): md5
+        uuid_str (str): uuid
     """
+    def get_title_path_str(title_path_list):
+        res = []
+        for item in title_path_list:
+            res.append(f"<span> {item} </span>")
+        return res
+
     return (
-        f"{title}<br/><br/>"
-        f"<p class='extra_info'>文件源: {file_path[len(OB_NOTE_PATH):]}</p> <br/><br/>"
-        f"<p class='extra_info'>标题路径: {' <- '.join(title_path)} </p> <br/><br/>"
-        f"<p class='hide'>uuid: {uuid_str}<p>"
-        f"<p class='hide'>md5: {md5}<p>"
+        f"{title}<br/><br/>" +
+        f"<p class='extra_info'>✈️ {file_path[len(OB_NOTE_PATH):]}</p>" +
+        "🌾 " + "🌕".join(get_title_path_str(title_path)) + "\n" +
+        f"<p class='hide'>uuid: {uuid_str}<p>" +
+        f"<p class='hide'>md5: md5_str <p>"
     )
 
 
