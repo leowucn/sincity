@@ -124,6 +124,7 @@ def _add_whitespace_line_before_wpx_line(file_path):
     pattern = re.compile(f'^---$\n^{UUID_FLAG}:.*$', re.MULTILINE)
     matches = pattern.finditer(content)
 
+    # 允许的连续最大空白行
     continuous_white_line = 4
 
     # 处理匹配结果
