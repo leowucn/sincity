@@ -85,7 +85,6 @@ def _add_meta_info(file_path, blocks):
         uuid_str = _find_block_uuid(file_path, block)
         title_path = _find_title_path(block[0][0], lines, code_blocks)
         front_title, front_lines, back_lines = _parse_block(block)
-        back_lines = _trim_uuid_line(back_lines)
 
         item = {
             # front_title不允许重复，如果重复则报错
@@ -298,6 +297,7 @@ def _parse_block(block):
     for line_info in block[back_index:len(block) - 1]:
         back_content.append(line_info[1].rstrip())
     back_content = _trim_lines(back_content)
+    back_content = _trim_uuid_line(back_content)
 
     return front_title, front_content, back_content
 
