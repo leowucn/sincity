@@ -442,6 +442,7 @@ def _delete_deck_note(data, deck_list_from_file_paths):
     # 这里之所以要执行10次，是因为每次会把最后一空卡片deck删掉
     # 通过执行多次，可以删除嵌套层级很深的空deck
     for i in range(10):
+        print(f"尝试第 {i+1} 次清理空deck")
         for deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
             if not _find_notes_by_deck(deck_name):
                 _delete_deck(deck_name)
