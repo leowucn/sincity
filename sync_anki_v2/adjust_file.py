@@ -4,7 +4,10 @@ from utils import *
 from const import *
 
 
-def _adjust_file(file_path):
+def _insert_uuid_if_need(file_path):
+    """
+    如果卡片块没有uuid则插入，否则忽略
+    """
     blocks = split_list_by_element(file_path, END_FLAG, True)
 
     modified_blocks = []
@@ -115,46 +118,14 @@ def _insert_three_dash(file_path):
         file.writelines(modified_lines)
 
 
-def _add_whitespace_line_before_wpx_line(file_path):
-    # 读取文件内容
-    with open(file_path, 'r') as file:
-        content = file.read()
-
-    # 使用正则表达式进行匹配
-    pattern = re.compile(f'^---$\n^{UUID_FLAG}:.*$', re.MULTILINE)
-    matches = pattern.finditer(content)
-
-    # 允许的连续最大空白行
-    continuous_white_line = 4
-
-    # 处理匹配结果
-    modified_content = content
-    for match in matches:
-        start, end = match.span()
-        # 计算匹配行前面的连续空白行数
-        preceding_empty_lines = 0
-        for i in range(start - 1, -1, -1):
-            if content[i].isspace():
-                preceding_empty_lines += 1
-            else:
-                break
-
-        # 补充连续空白行至三个
-        if preceding_empty_lines < continuous_white_line:
-            padding = '\n' * (continuous_white_line - preceding_empty_lines)
-            modified_content = modified_content[:start] + padding + modified_content[start:]
-
-    # 写回文件
-    with open(file_path, 'w') as file:
-        file.write(modified_content)
-
-
 def adjust_files(file_list):
     for file_path in file_list:
-        _adjust_file(file_path)
+        _insert_uuid_if_need(file_path)
         _remove_multiple_whitespace_line(file_path)
         _append_three_star(file_path)
         # _insert_three_dash 一定要在 _add_whitespace_line_before_wpx_line之后执行
+        #
+        # 另外，在_trim_uuid_line函数中，提取数据时，判断了uuid行前面是不是---，如果是的话会删除
+        # 如果哪天不再使用_insert_three_dash则需要在在_trim_uuid_line中删除对应代码
         _insert_three_dash(file_path)
-        _add_whitespace_line_before_wpx_line(file_path)
 

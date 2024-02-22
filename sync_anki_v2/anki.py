@@ -427,9 +427,7 @@ def _delete_deck_note(data, deck_list_from_file_paths):
         for data_note in data_note_list:
             cache.add(data_note["uuid"])
 
-    anki_deck_list = _remove_prefix_deck_name(_get_all_valid_decks())
-
-    for anki_deck in anki_deck_list:
+    for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
         if anki_deck not in data:
             _delete_deck(anki_deck)
             continue
@@ -440,9 +438,13 @@ def _delete_deck_note(data, deck_list_from_file_paths):
                 _delete_note(deck_note["noteId"])
 
     # 删除没有卡片的空deck
-    for deck_name in anki_deck_list:
-        if not _find_notes_by_deck(deck_name):
-            _delete_deck(deck_name)
+    #
+    # 这里之所以要执行10次，是因为每次会把最后一空卡片deck删掉
+    # 通过执行多次，可以删除嵌套层级很深的空deck
+    for i in range(10):
+        for deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
+            if not _find_notes_by_deck(deck_name):
+                _delete_deck(deck_name)
 
 
 def _add_deck_note(data):

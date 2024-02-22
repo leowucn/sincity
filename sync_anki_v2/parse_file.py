@@ -263,6 +263,8 @@ def _trim_uuid_line(lines):
     for index in range(len(lines) - 1, -1, -1):
         if UUID_FLAG in lines[index]:
             lines.pop(index)
+            if lines[index-1].strip() == "---":
+                lines.pop(index-1)
             break
     return lines
 
@@ -316,13 +318,12 @@ def get_blocks():
     """
     path_list = get_files()
 
-    blocks = []
+    result = []
 
     for file_path in path_list:
-        blocks_of_file = _get_blocks(file_path)
-        blocks.extend(blocks_of_file)
+        result.extend(_get_blocks(file_path))
 
-    return blocks
+    return result
 
 # 调用示例
 # py3 ./parse_file.py "./abc/w.md"
