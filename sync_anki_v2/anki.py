@@ -92,8 +92,6 @@ def _find_notes_by_deck(deck_name):
 
 def _find_cards_by_deck(deck_name):
     response = _find_cards("deck:", deck_name)
-    _print_msg(f"根据牌组查询关联的卡片列表, 牌组名称: {deck_name}", response.json()["error"])
-
     # check if the request was successful
     if response.status_code != 200:
         raise RuntimeError(response)

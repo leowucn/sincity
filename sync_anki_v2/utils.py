@@ -94,8 +94,6 @@ def get_file_extension(file_path):
 def first_delimiter_for_card(num=1):
     """
     卡片正面和反面之间的分割线
-    Returns:
-
     """
     return "<p style='width: 100%; height: 8px; background-color: #1d9ed1; margin: 30px 0;'></p>" * num
 
@@ -103,8 +101,6 @@ def first_delimiter_for_card(num=1):
 def second_delimiter_for_card(num=1):
     """
     卡片正面和反面之间的分割线
-    Returns:
-
     """
     return "<p style='width: 100%; height: 8px; background-color: #f2c631; margin: 30px 0;'></p>" * num
 
@@ -112,10 +108,15 @@ def second_delimiter_for_card(num=1):
 def third_delimiter_for_card(num=1):
     """
     卡片正面和反面之间的分割线
-    Returns:
-
     """
     return "<p style='width: 100%; height: 10px; background-color: #f76132; margin: 40px 0;'></p>" * num
+
+
+def ad_line():
+    """
+    ad插件在同步到anki后转换的行
+    """
+    return "<p style='width: 100%; height: 10px; background-color: #5e33d8; margin: 20px 0;'></p>"
 
 
 def delimiter_for_line(num=1):

@@ -32,9 +32,7 @@ def _get_path_list(path_list):
 
 
 def get_files():
-    path_list = _get_path_list([OB_NOTE_PATH])
-
-    return path_list
+    return _get_path_list([OB_NOTE_PATH])
 
 # 调用示例
 # ./get_files.py "/dir/path1" "/dir/path2"

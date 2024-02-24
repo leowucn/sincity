@@ -14,6 +14,10 @@ def sync():
     # 调整文件内容。比如自动增加uuid行
     adjust_files(path_list)
 
+    print("=========================================要处理的文件列表==========================================")
+    for file_path in path_list:
+        print(file_path)
+
     blocks = get_blocks()
     create_deck_if_need(blocks)
 

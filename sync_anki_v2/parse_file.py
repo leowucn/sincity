@@ -76,6 +76,13 @@ def _get_backend_value(block_lines):
     return second_delimiter_for_card() + "\n---\n" + "\n".join(block_lines) + "<br><br>" + third_delimiter_for_card()
 
 
+def _get_file_path_value(file_path):
+    file_path = file_path[len(OB_NOTE_PATH):]
+    if file_path.startswith("/"):
+        file_path = file_path[1:]
+    return file_path.replace("/", " / ")
+
+
 def _add_meta_info(file_path, blocks):
     lines = get_file_lines(file_path)
     code_blocks = _get_code_blocks(lines)
@@ -92,8 +99,8 @@ def _add_meta_info(file_path, blocks):
             "front_content": "\n".join(front_lines),
             "back_content": _get_backend_value(back_lines),
             "title_path": title_path,
-            "file_path": file_path,
-            "deck": path_to_double_colon(file_path),
+            "file_path": _get_file_path_value(file_path),
+            "deck": path_to_double_colon(file_path).replace(" ", "_"),
             "uuid": uuid_str,
         }
         # md5_for_data 是根据卡片中真正的数据计算出来的
@@ -124,7 +131,7 @@ def _create_note_front(title, file_path, title_path, uuid_str):
 
     Args:
         title (_type_): 原始标题
-        file_path (_type_): 数据源文件路径
+        file_path (_type_): 文件路径
         title_path (list): 标题路径
         uuid_str (str): uuid
     """
@@ -136,8 +143,8 @@ def _create_note_front(title, file_path, title_path, uuid_str):
 
     return (
         f"{title}<br/><br/>" +
-        f"<p class='extra_info'>✈️ {file_path[len(OB_NOTE_PATH):]}</p>" +
-        "🥕".join(get_title_path_str(title_path)) + "\n" +
+        f"<p class='extra_info'>📕: {file_path}</p>" +
+        "🍀".join(get_title_path_str(title_path)) + "\n" +
         f"<p class='hide'>uuid: {uuid_str}<p>" +
         f"<p class='hide'>md5: md5_str <p>"
         f"<p class='hide'>md5_for_data: md5_for_data_str <p>"
@@ -309,6 +316,12 @@ def _parse_block(block):
         back_content.append(line_info[1].rstrip())
     back_content = _trim_lines(back_content)
     back_content = _trim_uuid_line(back_content)
+
+    # 将ad-note插件的形式转换为方便在卡片中显示的形式
+    # 仍旧会包裹内容
+    for i in range(len(back_content)):
+        if back_content[i].startswith("````"):
+            back_content[i] = ad_line() + "\n"
 
     return front_title, front_content, back_content
 
