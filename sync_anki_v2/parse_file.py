@@ -96,14 +96,22 @@ def _add_meta_info(file_path, blocks):
             "deck": path_to_double_colon(file_path),
             "uuid": uuid_str,
         }
+        # md5_for_data 是根据卡片中真正的数据计算出来的
+        # 如果 md5_for_data 变化，说明卡片需要重新被记忆，因此相关的代码逻辑会重置卡片的记忆次数
+        # 注意，这里会重置卡片次数
         item["front_meta_info"] = _create_note_front(
             item["front_title"],
             item["file_path"],
             item["title_path"],
             item["uuid"]
         )
+        item["md5_for_data"] = _cal_md5_str_list(item["front_title"], item["front_content"], item["back_content"])
+        item["front_meta_info"] = item["front_meta_info"].replace("md5_for_data_str", item["md5_for_data"])
+
         md5_str = _cal_md5_for_block(item)
         item["front_meta_info"] = item["front_meta_info"].replace("md5_str", md5_str)
+        # 这里的 md5 字段是根据item所有字段计算出来的。也就是说item中任何字段改变都会导致卡片被更新
+        # 注意，这里的md5变化只会导致卡片被更新，也就是说即使内容更新，也不会在更新后立即需要重新记忆
         item["md5"] = md5_str
 
         res.append(item)
@@ -132,6 +140,7 @@ def _create_note_front(title, file_path, title_path, uuid_str):
         "🥕".join(get_title_path_str(title_path)) + "\n" +
         f"<p class='hide'>uuid: {uuid_str}<p>" +
         f"<p class='hide'>md5: md5_str <p>"
+        f"<p class='hide'>md5_for_data: md5_for_data_str <p>"
     )
 
 
@@ -310,6 +319,15 @@ def _cal_md5_for_block(block):
     """
     json_data = json.dumps(block, sort_keys=True)
     return hashlib.md5(json_data.encode()).hexdigest()
+
+
+def _cal_md5_str_list(*args):
+    """
+    计算列表的md5
+    """
+    sorted_args = sorted(args)
+    concatenated_string = ''.join(sorted_args)
+    return hashlib.md5(concatenated_string.encode()).hexdigest()
 
 
 def get_blocks():

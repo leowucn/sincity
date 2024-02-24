@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from anki import add_deck_note, change_deck_note, delete_deck_note, update_deck_note
+from anki import *
 from get_files import get_files
 from parse_file import get_blocks
 from adjust_file import adjust_files
@@ -13,6 +13,14 @@ def sync():
     path_list = get_files()
     # 调整文件内容。比如自动增加uuid行
     adjust_files(path_list)
+
+    blocks = get_blocks()
+    create_deck_if_need(blocks)
+
+    blocks = get_blocks()
+    print("==========================================forget_cards===========================================")
+    print(f"本地同步需要处理的卡片总数: {len(blocks)}")
+    forget_cards(blocks)
 
     blocks = get_blocks()
     print("========================================change_deck_note=========================================")
