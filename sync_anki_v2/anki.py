@@ -505,8 +505,9 @@ def add_deck_note(block_list):
 
     # 保存当前anki所有卡片的uuid
     uuid_set = set()
-    for anki_deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
-        for anki_note in _find_notes_by_deck(anki_deck_name):
+    for item in _get_all_valid_decks():
+        note_list = _find_notes_by_deck(item)
+        for anki_note in note_list:
             anki_note_uuid = extract_value_from_str(anki_note["fields"]["Front"]["value"], "uuid")
             if anki_note_uuid in uuid_set:
                 raise Exception(f"不允许笔记中出现重复的uuid, uuid: {anki_note_uuid}")
@@ -545,6 +546,14 @@ def update_deck_note(block_list):
                 _update_note(cache[data_note["uuid"]]["note_id"], front_value, back_value)
 
 
+def _if_parent_deck(deck_name):
+    target_count = deck_name.count("::")
+    for item in _remove_prefix_deck_name(_get_all_valid_decks()):
+        if item.startswith(deck_name) and item.count("::") > target_count:
+            return True
+    return False
+
+
 def delete_deck_note(block_list, data_original_deck_list):
     data = {}
     for block in block_list:
@@ -565,7 +574,8 @@ def delete_deck_note(block_list, data_original_deck_list):
         for data_note in data_note_list:
             cache.add(data_note["uuid"])
 
-    for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
+    anki_deck_list = _remove_prefix_deck_name(_get_all_valid_decks())
+    for anki_deck in anki_deck_list:
         if anki_deck not in data:
             _delete_deck(anki_deck)
             continue
@@ -574,6 +584,14 @@ def delete_deck_note(block_list, data_original_deck_list):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
             if deck_note_uuid not in cache:
                 _delete_note(deck_note["noteId"])
+
+    # 测试发现父deck的卡片应该为0，如果不为0，则应该清理卡片
+    for deck_name in _get_all_valid_decks():
+        if not _if_parent_deck(deck_name):
+            continue
+        note_list = _find_notes_by_deck(deck_name)
+        for note in note_list:
+            _delete_note(note["noteId"])
 
     # 删除没有卡片的空deck
     #

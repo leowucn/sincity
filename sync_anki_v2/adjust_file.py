@@ -118,6 +118,44 @@ def _insert_three_dash(file_path):
         file.writelines(modified_lines)
 
 
+def _insert_three_dash(file_path):
+    """
+    在uuid行前插入---
+    """
+    # 读取文件内容
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    # 处理以 "wpx" 开头的行
+    modified_lines = []
+
+    for i in range(len(lines)):
+        current_line = lines[i]
+        if current_line.startswith("wpx") and (i == 0 or not lines[i-1].startswith("---\n")):
+            modified_lines.append("---\n")
+        modified_lines.append(current_line)
+
+    # 写回文件
+    with open(file_path, 'w') as file:
+        file.writelines(modified_lines)
+
+
+def _replace_dollar_symbol(file_path):
+    """
+    替换$符号
+    """
+    # 读取文件内容
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    for i in range(len(lines)):
+        lines[i] = lines[i].replace("$", "🔪")
+
+    # 写回文件
+    with open(file_path, 'w') as file:
+        file.writelines(lines)
+
+
 def adjust_files(file_list):
     for file_path in file_list:
         _insert_uuid_if_need(file_path)
@@ -128,4 +166,5 @@ def adjust_files(file_list):
         # 另外，在_trim_uuid_line函数中，提取数据时，判断了uuid行前面是不是---，如果是的话会删除
         # 如果哪天不再使用_insert_three_dash则需要在在_trim_uuid_line中删除对应代码
         _insert_three_dash(file_path)
+        _replace_dollar_symbol(file_path)
 

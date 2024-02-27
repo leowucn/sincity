@@ -193,51 +193,42 @@ def _extract_hash_count(title):
         return 0
 
 
-def _find_title_path(curr_index, lines, code_blocks):
-    title_path = []
+def _get_pure_title(raw_title):
+    return raw_title.strip("#").strip()
 
-    pre_hash_count = 100
+
+def _find_title_path(curr_index, lines, code_blocks):
+    title_list = []
     for i in range(curr_index, -1, -1):
-        hit = False
+        hit_code = False
         for code_block in code_blocks:
             if code_block[0] < i < code_block[1]:
-                hit = True
+                hit_code = True
                 break
 
-        if hit:
+        if hit_code:
             continue
 
         curr_line = lines[i].strip()
-        if not curr_line.startswith("#") and curr_line.endswith(END_FLAG):
+        if not curr_line.startswith("#") or not curr_line:
             continue
 
-        curr_line = curr_line.replace(START_FLAG, "").replace(END_FLAG, "")
+        title_list.append(curr_line)
 
-        if not curr_line:
-            continue
+    res = []
+    if len(title_list) > 0:
+        res.append(_get_pure_title(title_list[0]))
+    for i in range(1, len(title_list), 1):
+        curr_sharp_count = title_list[i].count("#")
+        pre_sharp_count = title_list[i - 1].count("#")
 
-        hash_count = _extract_hash_count(curr_line)
+        if curr_sharp_count > pre_sharp_count:
+            break
 
-        if not hash_count:
-            continue
+        if curr_sharp_count < pre_sharp_count:
+            res.append(_get_pure_title(title_list[i]))
 
-        title = curr_line.strip('# ')
-
-        # 如果到了一级标题或者已经倒序遍历了所有行
-        if hash_count == 1 or i == 0:
-            title_path.append(title)
-            return title_path
-
-        # 把当前行的标题加入结果
-        if curr_index == i:
-            title_path.append(title)
-            pre_hash_count = hash_count
-
-        if hash_count < pre_hash_count:
-            title_path.append(title)
-            pre_hash_count = hash_count
-
-    return title_path
+    return res
 
 
 def _find_block_uuid(file_path, block):
