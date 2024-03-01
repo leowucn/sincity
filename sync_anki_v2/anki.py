@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import base64
+import sys
+
 import requests
+import concurrent.futures
 from utils import *
 from log import *
 from parse_file import get_unsuspend_and_suspend_uuid_list
@@ -181,9 +184,6 @@ def _suspend_card(card_ids):
     if response.json()["error"]:
         raise RuntimeError(f"_suspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
 
-    print_first_level_log(f"suspend card num: {len(card_ids)}")
-
-
 
 def _unsuspend_card(card_ids):
     """
@@ -206,8 +206,6 @@ def _unsuspend_card(card_ids):
     )
     if response.json()["error"]:
         raise RuntimeError(f"_unsuspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
-
-    print_first_level_log(f"unsuspend card num: {len(card_ids)}")
 
 
 def _get_deck_stats(deck_name):
@@ -556,12 +554,15 @@ def change_deck_note(block_list):
                 raise Exception("不允许笔记中出现重复uuid")
             data_uuid_to_deck[data_note["uuid"]] = data_deck
 
-    for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
+    def process_anki_deck(anki_deck):
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
 
             if deck_note_uuid in data_uuid_to_deck and data_uuid_to_deck[deck_note_uuid] != anki_deck:
                 _change_deck(data_uuid_to_deck[deck_note_uuid], [deck_note["noteId"]])
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_anki_deck, anki_deck) for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks())]
+        concurrent.futures.wait(futures)
 
 
 def add_deck_note(block_list):
@@ -582,12 +583,15 @@ def add_deck_note(block_list):
                 raise Exception(f"不允许笔记中出现重复的uuid, uuid: {anki_note_uuid}")
             uuid_set.add(anki_note_uuid)
 
-    for data_deck, data_note_list in data.items():
+    def process_data_deck(data_deck, data_note_list):
         for data_note in data_note_list:
             if data_note["uuid"] not in uuid_set:
                 # 需要新增
                 front_value, back_value = create_card_front_and_back(data_note)
                 _add_note(data_deck, front_value, back_value)
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_data_deck, data_deck, data_note_list) for data_deck, data_note_list in data.items()]
+        concurrent.futures.wait(futures)
 
 
 def update_deck_note(block_list):
@@ -598,7 +602,7 @@ def update_deck_note(block_list):
             data[deck] = []
         data[deck].append(block)
 
-    for data_deck, data_note_list in data.items():
+    def process_update_deck(data_deck, data_note_list):
         cache = {}
         for deck_note in _find_notes_by_deck(data_deck):
             deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5")
@@ -613,6 +617,10 @@ def update_deck_note(block_list):
                 front_value, back_value = create_card_front_and_back(data_note)
                 # 需要更新
                 _update_note(cache[data_note["uuid"]]["note_id"], front_value, back_value)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_update_deck, data_deck, data_note_list) for data_deck, data_note_list in data.items()]
+        concurrent.futures.wait(futures)
 
 
 def _if_parent_deck(deck_name):
@@ -643,16 +651,17 @@ def delete_deck_note(block_list, data_original_deck_list):
         for data_note in data_note_list:
             cache.add(data_note["uuid"])
 
-    anki_deck_list = _remove_prefix_deck_name(_get_all_valid_decks())
-    for anki_deck in anki_deck_list:
+    def process_anki_deck(anki_deck):
         if anki_deck not in data:
             _delete_deck(anki_deck)
-            continue
-
+            return
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
             if deck_note_uuid not in cache:
                 _delete_note(deck_note["noteId"])
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_anki_deck, anki_deck) for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks())]
+        concurrent.futures.wait(futures)
 
     # 测试发现父deck的卡片应该为0，如果不为0，则应该清理卡片
     for deck_name in _get_all_valid_decks():
@@ -688,14 +697,22 @@ def forget_cards(block_list):
                 raise Exception("不允许笔记中出现重复uuid")
             data_uuid_to_md5[data_note["uuid"]] = data_note["md5_for_data"]
 
-    for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
-        for deck_note in _find_notes_by_deck(anki_deck):
-            deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
-            deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5_for_data")
+    def process_deck(anki_deck):
+        try:
+            for deck_note in _find_notes_by_deck(anki_deck):
+                deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
+                deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5_for_data")
 
-            if deck_note_uuid in data_uuid_to_md5 and data_uuid_to_md5[deck_note_uuid] != deck_note_md5:
-                card_id = _get_card_id_by_note_id([anki_deck], deck_note["noteId"])
-                _forget_cards(card_id)
+                if deck_note_uuid in data_uuid_to_md5 and data_uuid_to_md5[deck_note_uuid] != deck_note_md5:
+                    card_id = _get_card_id_by_note_id([anki_deck], deck_note["noteId"])
+                    _forget_cards(card_id)
+                    raise RuntimeError("hello world")
+        except Exception as e:
+            sys.exit(1)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_deck, anki_deck) for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks())]
+        concurrent.futures.wait(futures)
 
 
 def suspend_and_unsuspend_cards(block_list):
@@ -734,8 +751,6 @@ def suspend_and_unsuspend_cards(block_list):
         _unsuspend_card(unsuspend_card_ids)
         suspend_card_ids = _get_card_ids_by_note_ids([deck_name], suspend_note_ids)
         _suspend_card(suspend_card_ids)
-
-        print("\n")
 
 
 
