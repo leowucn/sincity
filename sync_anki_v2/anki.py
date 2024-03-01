@@ -181,9 +181,6 @@ def _suspend_card(card_ids):
     if response.json()["error"]:
         raise RuntimeError(f"_suspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
 
-    print_first_level_log(f"suspend card num: {len(card_ids)}")
-
-
 
 def _unsuspend_card(card_ids):
     """
@@ -206,8 +203,6 @@ def _unsuspend_card(card_ids):
     )
     if response.json()["error"]:
         raise RuntimeError(f"_unsuspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
-
-    print_first_level_log(f"unsuspend card num: {len(card_ids)}")
 
 
 def _get_deck_stats(deck_name):
