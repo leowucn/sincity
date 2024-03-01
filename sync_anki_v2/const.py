@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 
 # 卡片块起始标志
-START_FLAG = "<-s->"
+START_FLAG = "==1=="
 # 卡片块内容开始标志
-CONTENT_FLAG = "<-c->"
+CONTENT_FLAG = "==2=="
 # 卡片块结束标志
-END_FLAG = "<-e->"
+END_FLAG = "==3=="
+# 表示在当前文本内，该符号以上的部分是未被suspend，而下面的都是被suspend的
+SUSPEND_FLAG = "==0=="
 
 # 卡片块的uuid
 # 卡片块的uuid行的格式是  <p>wpx: fwe2iex </p>

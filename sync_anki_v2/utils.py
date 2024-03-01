@@ -6,6 +6,7 @@ import json
 import uuid
 import shutil
 import re
+import colorful as cf
 
 from const import *
 
@@ -265,25 +266,36 @@ def extract_value_from_str(input_str, field_name):
     return match.group(1)
 
 
-def path_to_double_colon(file_path):
+def convert_file_path_to_anki_deck_name(file_path):
     """
-    将文件路径转换为deck格式。即将 /a/b/c.md转换为 a::b::c
+    将原始文件路径转换为deck格式。即将 /a/b/c.md转换为 a::b::c
     返回结果将去掉路径前指定部分
+
+    注意：这里返回的deck已经是anki中的最终deck_name了
     """
     # 使用os.path.normpath来处理相对路径
     normalized_path = os.path.normpath(file_path)
-
     # 分割路径
     path_parts = normalized_path.split(os.path.sep)
-
     # 过滤掉空部分
     filtered_path_parts = [part for part in path_parts if part]
-
     # 将路径部分用双冒号连接起来
     result_string = "::".join(filtered_path_parts)
-
     res, _ = os.path.splitext(result_string)
-
     parts = res.split("::")
+    valid_part_number = get_configured_file_path_part_number()
+    deck_name = "::".join(parts[valid_part_number:]).strip()
+    if not deck_name:
+        raise RuntimeError(f"不允许创建空的牌组名称, 文件路径: {file_path}")
+    return deck_name.replace(" ", "_")
 
-    return "::".join(parts[7:])
+
+def get_configured_file_path_part_number():
+    """
+    获取OB_NOTE_PATH文件路径中的块数
+    """
+    num = 0
+    for item in OB_NOTE_PATH.split('/'):
+        if item.strip():
+            num += 1
+    return num

@@ -100,7 +100,7 @@ def _add_meta_info(file_path, blocks):
             "back_content": _get_backend_value(back_lines),
             "title_path": title_path,
             "file_path": _get_file_path_value(file_path),
-            "deck": path_to_double_colon(file_path).replace(" ", "_"),
+            "deck": convert_file_path_to_anki_deck_name(file_path).replace(" ", "_"),
             "uuid": uuid_str,
         }
         # md5_for_data 是根据卡片中真正的数据计算出来的
@@ -348,5 +348,37 @@ def get_blocks():
 
     return result
 
-# 调用示例
-# py3 ./parse_file.py "./abc/w.md"
+
+def get_unsuspend_and_suspend_uuid_list():
+    """
+    获取unsuspend和suspend的uuid列表
+    注意，会返回两个值，一个是unsuspend的uuid列表，一个是suspend的uuid列表
+    """
+    path_list = get_files()
+
+    result = {}
+
+    for file_path in path_list:
+        all_uuid_set = set()
+        unsuspend_uuid_set = set()
+        unsuspend_line_index = -1
+
+        lines = get_file_lines(file_path)
+        for index in range(len(lines)):
+            line = lines[index]
+            if SUSPEND_FLAG in line:
+                unsuspend_line_index = index
+
+            if UUID_FLAG in line:
+                all_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
+
+            if UUID_FLAG in line and not unsuspend_line_index != -1:
+                unsuspend_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
+
+        result[convert_file_path_to_anki_deck_name(file_path)] = {
+            "unsuspend_uuid_set": unsuspend_uuid_set,
+            "suspend_uuid_set": all_uuid_set.difference(unsuspend_uuid_set),
+            "unsuspend_line_index": unsuspend_line_index
+        }
+
+    return result

@@ -2,18 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import base64
-import uuid
 import requests
 from utils import *
-
-
-def _print_msg(msg, error):
-    if error is None:
-        print(f"成功{msg}")
-    else:
-        print(
-            f"--------------------------------------------------------{msg}失败. err: {error}"
-        )
+from log import *
+from parse_file import get_unsuspend_and_suspend_uuid_list
 
 
 def _extract_image_src(str_data):
@@ -35,11 +27,7 @@ def _store_media_file(image_path):
             "filename": image_path,
         },
     }
-
     response = requests.post(f"{ANKI_CONNECT}/action", json=request_data)
-
-    # print_msg(f"存储图片或视频, image_path: {ROOT_IMAGE_PATH}", response.json()["error"])
-
     return response.json()["result"] if response.ok else None
 
 
@@ -52,7 +40,7 @@ def _delete_media_file(media_file_name):
     response = requests.post(ANKI_CONNECT, json=payload)
     if err := response.json()["error"]:
         raise RuntimeError(f"删除图片或视频失败, {media_file_name}, err: {err}")
-    _print_msg(f"删除图片或视频: {media_file_name}", None)
+    print_first_level_log(f"删除图片或视频: {media_file_name}")
 
 
 def _get_cards_info(card_ids):
@@ -125,6 +113,31 @@ def _get_card_id_by_note_id(deck_name_list, note_id):
     raise Exception(f"使用note_id: {note_id} 无法找到card. deck_name_list: {deck_name_list}")
 
 
+def _get_card_ids_by_note_ids(deck_name_list, note_ids):
+    """
+    根据笔记id列表查找card id列表
+    """
+    if type(deck_name_list) is not list:
+        raise RuntimeError("deck_name_list 必须是list类型")
+    if type(note_ids) is not list:
+        raise RuntimeError("note_ids 必须是list类型")
+
+    node_ids_set = set(note_ids)
+
+    res = []
+    for deck_name in deck_name_list:
+        card_ids = _find_cards_by_deck(deck_name)
+        card_info_list = _get_cards_info(card_ids)
+        for card_info in card_info_list:
+            if card_info["note"] in node_ids_set:
+                res.append(card_info["cardId"])
+                if len(res) == len(note_ids):
+                    return res
+    if len(res) != len(note_ids):
+        raise RuntimeError("不能完全找到所有笔记的card_id")
+    return res
+
+
 def _delete_deck_itself(deck_name):
     # 删除牌组
     response = requests.post(
@@ -140,7 +153,61 @@ def _delete_deck_itself(deck_name):
             }
         ),
     )
-    _print_msg(f"删除牌组, 牌组名称: {deck_name}", response.json()["error"])
+    if response.json()["error"]:
+        raise RuntimeError(f"_delete_deck_itself 操作出错, deck_name: {deck_name}, err: {response.json()['error']}")
+
+    print_first_level_log(f"删除牌组, 牌组名称: {deck_name}")
+
+
+def _suspend_card(card_ids):
+    """
+    休眠卡片
+    """
+    if type(card_ids) is not list:
+        raise RuntimeError("参数类型错误")
+
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "suspend",
+                "version": 6,
+                "params": {
+                    "cards": card_ids,
+                },
+            }
+        ),
+    )
+    if response.json()["error"]:
+        raise RuntimeError(f"_suspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
+
+    print_first_level_log(f"suspend card num: {len(card_ids)}")
+
+
+
+def _unsuspend_card(card_ids):
+    """
+    解除休眠卡片
+    """
+    if type(card_ids) is not list:
+        raise RuntimeError("参数类型错误")
+
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "unsuspend",
+                "version": 6,
+                "params": {
+                    "cards": card_ids,
+                },
+            }
+        ),
+    )
+    if response.json()["error"]:
+        raise RuntimeError(f"_unsuspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
+
+    print_first_level_log(f"unsuspend card num: {len(card_ids)}")
 
 
 def _get_deck_stats(deck_name):
@@ -189,7 +256,10 @@ def _create_deck_if_need(deck_name):
                 }
             ),
         )
-        _print_msg(f"创建牌组, 牌组名称: {deck_name}", response.json()["error"])
+        if response.json()["error"]:
+            raise RuntimeError(f"_create_deck_if_need 操作出错, deck_name: {deck_name}, err: {response.json()['error']}")
+
+        print_first_level_log(f"创建牌组, 牌组名称: {deck_name}")
 
 
 def _delete_deck(deck_name):
@@ -208,7 +278,10 @@ def _delete_note(note_id):
             }
         ),
     )
-    _print_msg(f"删除笔记, 笔记id: {note_id}", response.json()["error"])
+    if response.json()["error"]:
+        raise RuntimeError(f"_delete_note 操作出错, note_id: {note_id}, err: {response.json()['error']}")
+
+    print_first_level_log(f"删除笔记, 笔记id: {note_id}")
 
 
 def _forget_cards(card_id):
@@ -227,7 +300,10 @@ def _forget_cards(card_id):
             }
         ),
     )
-    _print_msg(f"忘记卡片, 笔记id: {card_id}", response.json()["error"])
+    if response.json()["error"]:
+        raise RuntimeError(f"_forget_cards 操作出错, note_id: {card_id}, err: {response.json()['error']}")
+
+    print_first_level_log(f"忘记卡片, 笔记id: {card_id}")
 
 
 def _add_note(deck_name, front, back):
@@ -252,11 +328,10 @@ def _add_note(deck_name, front, back):
 
     resp = response.json()
 
-    if err := resp["error"]:
-        raise RuntimeError(f"add 笔记出错 {err}, title: {_get_title_from_note(front)}")
+    if resp["error"]:
+        raise RuntimeError(f"_add_note 操作出错, 标题: {_get_title_from_note(front)}, err: {response.json()['error']}")
 
-    _print_msg(f"add 笔记, 标题: {_get_title_from_note(front)}", None)
-    return resp["result"]
+    print_first_level_log(f"_add_note 笔记, 标题: {_get_title_from_note(front)}")
 
 
 def _update_note(note_id, front, back):
@@ -279,13 +354,10 @@ def _update_note(note_id, front, back):
         ),
     )
 
-    resp = response.json()
+    if response.json()["error"]:
+        raise RuntimeError(f"_update_note 操作出错, 标题: {_get_title_from_note(front)}, err: {response.json()['error']}")
 
-    if err := resp["error"]:
-        raise RuntimeError(f"update 笔记出错 {err}, title: {_get_title_from_note(front)}")
-
-    _print_msg(f"update 笔记, 标题: {_get_title_from_note(front)}", None)
-    return resp["result"]
+    print_first_level_log(f"_update_note 笔记, 标题: {_get_title_from_note(front)}")
 
 
 def _change_deck(deck_name, note_ids):
@@ -312,13 +384,10 @@ def _change_deck(deck_name, note_ids):
         ),
     )
 
-    resp = response.json()
+    if response.json()["error"]:
+        raise RuntimeError(f"_change_deck 操作出错, deck_name: {deck_name}, note_ids: {note_ids}, err: {response.json()['error']}")
 
-    if err := resp["error"]:
-        raise RuntimeError(f"changeDeck 笔记出错 {err}, note_ids: {note_ids}")
-
-    _print_msg(f"changeDeck 笔记, note_ids: {note_ids}", None)
-    return resp["result"]
+    print_first_level_log(f"_change_deck 笔记, note_ids: {note_ids}")
 
 
 def _extract_file_paths(text):
@@ -382,7 +451,7 @@ def _prepare_value(answer):
         if ext_format in VIDEO_FORMATS:
             info = "<p style='color: red'> 视频格式文件忽略上传 </p>"
             answer = answer.replace(md_img_tag, info)
-            print("已忽略视频文件: ", image_file_name)
+            print_first_level_log("已忽略视频文件: ", image_file_name)
         else:
             if image_file_name.startswith(ATTACHMENT_DIR):
                 # Local images plus这个插件会自动给图片路径添加资产目录名
@@ -468,7 +537,7 @@ def create_deck_if_need(block_list):
         data[deck].append(block)
 
     for data_deck in data:
-        print(f"处理牌组: {data_deck}")
+        print_first_level_log(f"处理牌组: {data_deck}")
         _create_deck_if_need(data_deck)
 
 
@@ -598,7 +667,7 @@ def delete_deck_note(block_list, data_original_deck_list):
     # 这里之所以要执行10次，是因为每次会把最后一空卡片deck删掉
     # 通过执行多次，可以删除嵌套层级很深的空deck
     for i in range(15):
-        print(f"尝试第 {i + 1} 次清理空deck")
+        print_first_level_log(f"尝试第 {i + 1} 次清理空deck")
         for deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
             if _get_deck_stats(deck_name)["total_in_deck"] == 0:
                 _delete_deck(deck_name)
@@ -627,3 +696,46 @@ def forget_cards(block_list):
             if deck_note_uuid in data_uuid_to_md5 and data_uuid_to_md5[deck_note_uuid] != deck_note_md5:
                 card_id = _get_card_id_by_note_id([anki_deck], deck_note["noteId"])
                 _forget_cards(card_id)
+
+
+def suspend_and_unsuspend_cards(block_list):
+    data = {}
+    for block in block_list:
+        deck = block["deck"]
+        if deck not in data:
+            data[deck] = []
+        data[deck].append(block)
+
+    uuid_dict = get_unsuspend_and_suspend_uuid_list()
+    for deck_name, uuid_data in uuid_dict.items():
+        unsuspend_note_ids = []
+        suspend_note_ids = []
+
+        unsuspend_uuid_set = uuid_data["unsuspend_uuid_set"]
+        suspend_uuid_set = uuid_data["suspend_uuid_set"]
+        unsuspend_line_index = uuid_data["unsuspend_line_index"]
+
+        if len(unsuspend_uuid_set) == 0 and len(suspend_uuid_set) == 0:
+            continue
+
+        for deck_note in _find_notes_by_deck(deck_name):
+            deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
+            if deck_note_uuid in unsuspend_uuid_set:
+                unsuspend_note_ids.append(deck_note["noteId"])
+
+            if deck_note_uuid in suspend_uuid_set:
+                suspend_note_ids.append(deck_note["noteId"])
+
+        if unsuspend_line_index >= 0:
+            print_second_level_log(f"{deck_name} 存在休眠标记, 行号: {unsuspend_line_index + 1}")
+
+        print_first_level_log(deck_name)
+        unsuspend_card_ids = _get_card_ids_by_note_ids([deck_name], unsuspend_note_ids)
+        _unsuspend_card(unsuspend_card_ids)
+        suspend_card_ids = _get_card_ids_by_note_ids([deck_name], suspend_note_ids)
+        _suspend_card(suspend_card_ids)
+
+        print("\n")
+
+
+
