@@ -30,33 +30,17 @@ def get_absolute_paths(directory):
     """
     path_list = []
     for root, dirs, files in os.walk(directory):
-        for file in files:
-            path_list.append(os.path.join(root, file))
-
+        path_list.extend(os.path.join(root, file) for file in files)
     return path_list
 
 
 def get_file_last_modified_time(file_path):
-    try:
-        return os.path.getmtime(file_path)
-    except FileNotFoundError:
-        raise FileNotFoundError(file_path)
-    except Exception as e:
-        raise Exception(e, file_path)
+    return os.path.getmtime(file_path)
 
 
 def read_json_file(file_path):
-    try:
-        with open(file_path, 'r') as json_file:
-            # 使用json.load加载JSON文件内容到字典
-            data_dict = json.load(json_file)
-            return data_dict
-    except FileNotFoundError:
-        raise FileNotFoundError(file_path)
-    except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(f"error: {e}, file_path: {file_path}")
-    except Exception as e:
-        raise Exception(e, file_path)
+    with open(file_path, 'r') as json_file:
+        return json.load(json_file)
 
 
 def merge_and_filter(dict1, dict2):
@@ -77,11 +61,8 @@ def get_file_lines(file_path, encoding='utf-8'):
     """
     获取文件行列表
     """
-    try:
-        with open(file_path, 'r', encoding=encoding) as file:
-            return file.readlines()
-    except UnicodeDecodeError as e:
-        raise Exception(f"error: {e}, file_path: {file_path}")
+    with open(file_path, 'r', encoding=encoding) as file:
+        return file.readlines()
 
 
 def get_file_extension(file_path):
@@ -131,10 +112,7 @@ def calculate_dict_md5(data_dict):
     # 将字典转换为字符串，确保键值对的顺序一致
     data_str = json.dumps(data_dict, sort_keys=True)
 
-    # 计算MD5值
-    md5_hash = hashlib.md5(data_str.encode()).hexdigest()
-
-    return md5_hash
+    return hashlib.md5(data_str.encode()).hexdigest()
 
 
 def split_list_by_element(file_path, split_element, keep_last):
@@ -224,7 +202,7 @@ def backup_and_write_to_file(data, file_path):
     如果写入过程出错，则报错。同时恢复原文件
     """
     if not os.path.isfile(file_path):
-        raise Exception(f"文件不存在. {file_path}")
+        raise RuntimeError(f"文件不存在. {file_path}")
     # 备份文件到临时目录
     backup_dir = f"/tmp/{generate_uuid()}"
     os.makedirs(backup_dir, exist_ok=True)
@@ -258,12 +236,10 @@ def extract_value_from_str(input_str, field_name):
     """
     # 使用正则表达式匹配字段名称后面的值
     pattern = re.compile(fr"{field_name}:\s*(\w+)")
-    match = pattern.search(input_str)
-
-    # 如果匹配到，返回匹配到的值
-    if not match:
-        raise Exception("指定字段错误")
-    return match.group(1)
+    if match := pattern.search(input_str):
+        return match[1]
+    else:
+        raise RuntimeError("指定字段错误")
 
 
 def convert_file_path_to_anki_deck_name(file_path):
@@ -284,10 +260,10 @@ def convert_file_path_to_anki_deck_name(file_path):
     res, _ = os.path.splitext(result_string)
     parts = res.split("::")
     valid_part_number = get_configured_file_path_part_number()
-    deck_name = "::".join(parts[valid_part_number:]).strip()
-    if not deck_name:
+    if deck_name := "::".join(parts[valid_part_number:]).strip():
+        return deck_name.replace(" ", "_")
+    else:
         raise RuntimeError(f"不允许创建空的牌组名称, 文件路径: {file_path}")
-    return deck_name.replace(" ", "_")
 
 
 def get_configured_file_path_part_number():
@@ -299,3 +275,4 @@ def get_configured_file_path_part_number():
         if item.strip():
             num += 1
     return num
+

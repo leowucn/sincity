@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import concurrent.futures
 from utils import *
 from const import *
-from get_files import get_files
+from get_files import get_all_file_path_list, get_file_path_list
 
 
 def _get_blocks(file_path):
@@ -33,7 +34,7 @@ def _get_blocks(file_path):
                         start_index = index1
                         break
                 if start_index < 0:
-                    raise Exception("无法找到块起始位置")
+                    raise RuntimeError("无法找到块起始位置")
 
                 lines1 = []
                 for line1 in block[start_index:]:
@@ -42,7 +43,7 @@ def _get_blocks(file_path):
                 break
 
         if title_index < 0:
-            raise Exception(f"格式错误，无法找到块标题. 块起始行: {block[0][0]}, 文件: {file_path}")
+            raise RuntimeError(f"格式错误，无法找到块标题. 块起始行: {block[0][0]}, 文件: {file_path}")
 
     blocks = trim_blocks(blocks)
     for block in blocks:
@@ -51,13 +52,13 @@ def _get_blocks(file_path):
             if START_FLAG in line_info[1] or CONTENT_FLAG in line_info[1] or END_FLAG in line_info[1]:
                 tmp.append(line_info[1].strip())
         if len(tmp) != 3 and len(tmp) != 2:
-            raise Exception(f"不允许重复或者嵌套块边界标记. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+            raise RuntimeError(f"不允许重复或者嵌套块边界标记. 块起始行索引: {block[0][0]}, 文件: {file_path}")
         if len(tmp) == 3:
             if tmp[0] != START_FLAG or tmp[1] != CONTENT_FLAG or tmp[2] != END_FLAG:
-                raise Exception(f"请使用s c e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+                raise RuntimeError(f"请使用s c e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
         if len(tmp) == 2:
             if tmp[0] != START_FLAG or tmp[1] != END_FLAG:
-                raise Exception(f"请使用s e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+                raise RuntimeError(f"请使用s e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
 
     for block in blocks:
         for index, line in enumerate(block):
@@ -65,9 +66,9 @@ def _get_blocks(file_path):
                 continue
 
             if START_FLAG in line:
-                raise Exception(f"不允许嵌套块起始标记. 内容: {line}")
+                raise RuntimeError(f"不允许嵌套块起始标记. 内容: {line}")
             if END_FLAG in line:
-                raise Exception(f"不允许嵌套块结束标记. 内容: {line}")
+                raise RuntimeError(f"不允许嵌套块结束标记. 内容: {line}")
 
     return _add_meta_info(file_path, blocks)
 
@@ -238,7 +239,7 @@ def _find_block_uuid(file_path, block):
     for line_info in block:
         if UUID_FLAG in line_info[1]:
             return extract_value_from_str(line_info[1], UUID_FLAG)
-    raise Exception(f"无法找到uuid. 文件: {file_path}, 行: {block[0][0]}")
+    raise RuntimeError(f"无法找到uuid. 文件: {file_path}, 行: {block[0][0]}")
 
 
 def _trim_lines(lines):
@@ -335,16 +336,24 @@ def _cal_md5_str_list(*args):
     return hashlib.md5(concatenated_string.encode()).hexdigest()
 
 
-def get_blocks():
+def get_blocks(all_block=True):
     """
     获取卡片块
     """
-    path_list = get_files()
+    path_list = get_all_file_path_list()
+    if not all_block:
+        path_list = get_file_path_list()
 
     result = []
 
-    for file_path in path_list:
-        result.extend(_get_blocks(file_path))
+    # 使用 ProcessPoolExecutor 进行多进程处理
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        # 将每个文件路径提交给 _get_blocks 函数进行处理，并获取结果
+        results = list(executor.map(_get_blocks, path_list))
+
+    # 将所有结果合并到一个列表中
+    for blocks in results:
+        result.extend(blocks)
 
     return result
 
@@ -354,7 +363,7 @@ def get_unsuspend_and_suspend_uuid_list():
     获取unsuspend和suspend的uuid列表
     注意，会返回两个值，一个是unsuspend的uuid列表，一个是suspend的uuid列表
     """
-    path_list = get_files()
+    path_list = get_all_file_path_list()
 
     result = {}
 
@@ -372,13 +381,14 @@ def get_unsuspend_and_suspend_uuid_list():
             if UUID_FLAG in line:
                 all_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
 
-            if UUID_FLAG in line and not unsuspend_line_index != -1:
+            if UUID_FLAG in line and unsuspend_line_index == -1:
                 unsuspend_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
 
         result[convert_file_path_to_anki_deck_name(file_path)] = {
             "unsuspend_uuid_set": unsuspend_uuid_set,
             "suspend_uuid_set": all_uuid_set.difference(unsuspend_uuid_set),
-            "unsuspend_line_index": unsuspend_line_index
+            "unsuspend_line_index": unsuspend_line_index,
+            "file_path": file_path
         }
 
     return result

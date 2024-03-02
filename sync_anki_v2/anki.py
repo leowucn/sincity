@@ -3,8 +3,10 @@
 
 import base64
 import time
+from regex import W
 
 import requests
+from get_files import get_file_path_list, get_no_exist_file_path_list, if_found_in_file_path_cache
 from utils import *
 from log import *
 from parse_file import get_unsuspend_and_suspend_uuid_list
@@ -331,6 +333,55 @@ def _add_note(deck_name, front, back):
     print_first_level_log(f"_add_note 笔记, 标题: {_get_title_from_note(front)}")
 
 
+def _add_notes(note_info_list):
+    if type(note_info_list) is not list:
+        raise RuntimeError("参数类型错误")
+
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "addNotes",
+                "version": 6,
+                "params": {
+                    "notes": note_info_list
+                },
+            }
+        ),
+    )
+
+    resp = response.json()
+
+    if resp["error"]:
+        raise RuntimeError(f"_add_notes 操作出错, err: {response.json()['error']}")
+
+
+def _can_add_notes(note_info_list):
+    if type(note_info_list) is not list:
+        raise RuntimeError("参数类型错误")
+
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "canAddNotes",
+                "version": 6,
+                "params": {
+                    "notes": note_info_list
+                },
+            }
+        ),
+    )
+
+    resp = response.json()
+
+    if resp["error"]:
+        raise RuntimeError(f"_can_add_notes 操作出错, err: {response.json()['error']}")
+    
+    return resp["result"]
+
+
+
 def _update_note(note_id, front, back):
     response = requests.post(
         ANKI_CONNECT,
@@ -549,7 +600,25 @@ def _remove_prefix_deck_name(deck_list):
     return sorted(res)
 
 
-def create_card_front_and_back(data_note):
+def _create_note_info_list(data_note_list):
+    """创建可以用于调用_add_notes和_can_add_notes的参数
+    """
+    result = []
+    for data_note in data_note_list:
+        front_value, back_value = _create_card_front_and_back(data_note)
+
+        result.append({
+            "deckName": data_note["deck"],
+            "modelName": MODEL_NAME,
+            "fields": {"Front": front_value, "Back": back_value},
+            "options": {"allowDuplicate": False},
+            "tags": [],
+        })
+    return result
+
+
+
+def _create_card_front_and_back(data_note):
     """
     生成新卡片或者更新卡片时使用
     """
@@ -631,7 +700,7 @@ def add_deck_note(block_list):
         for data_note in data_note_list:
             if data_note["uuid"] not in uuid_set:
                 # 需要新增
-                front_value, back_value = create_card_front_and_back(data_note)
+                front_value, back_value = _create_card_front_and_back(data_note)
                 _add_note(data_deck, front_value, back_value)
 
 
@@ -655,7 +724,7 @@ def update_deck_note(block_list):
 
         for data_note in data_note_list:
             if data_note["uuid"] in cache and data_note["md5"] != cache[data_note["uuid"]]["md5"]:
-                front_value, back_value = create_card_front_and_back(data_note)
+                front_value, back_value = _create_card_front_and_back(data_note)
                 # 需要更新
                 _update_note(cache[data_note["uuid"]]["note_id"], front_value, back_value)
 
@@ -681,8 +750,18 @@ def delete_note(block_list):
         for data_note in data_note_list:
             cache[data_note["uuid"]] = data_deck
 
-    anki_deck_list = _get_all_valid_decks()
-    for anki_deck in anki_deck_list:
+    file_path_list = get_file_path_list()
+    deck_name_set = {
+        convert_file_path_to_anki_deck_name(file_path)
+        for file_path in file_path_list
+    }
+
+    for anki_deck in _get_all_valid_decks():
+        # 这样操作确实只会删除需要删除的卡片，如果笔记中整个文件被删掉了，这里确实处理不了
+        # 不过，那种情况可以使用下面的 delete_deck 函数处理
+        if anki_deck not in deck_name_set:
+            continue
+
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
             if deck_note_uuid not in cache:
@@ -704,36 +783,18 @@ def delete_note(block_list):
             _delete_note(note["noteId"])
 
 
-def delete_deck(block_list, data_original_deck_list):
-    data = {}
-    for block in block_list:
-        deck = block["deck"]
-        if deck not in data:
-            data[deck] = []
-        data[deck].append(block)
+def delete_deck():
+    file_path_list = get_no_exist_file_path_list()
 
-    # deck_list_from_file_paths 是仓库下所有文件转换后的deck_name
-    # 而data下的deck是存在block的deck
-    #
-    # 这里先删除空文件对应的deck
-    for deck_name in set(data_original_deck_list).difference(set(data.keys())):
+    for file_path in file_path_list:
+        deck_name = convert_file_path_to_anki_deck_name(file_path)
         _delete_deck(deck_name)
-
-    cache = set()
-    for data_note_list in data.values():
-        for data_note in data_note_list:
-            cache.add(data_note["uuid"])
-
-    anki_deck_list = _get_all_valid_decks()
-    for anki_deck in anki_deck_list:
-        if anki_deck not in data and not _if_parent_deck(anki_deck):
-            _delete_deck(anki_deck)
 
     # 删除没有卡片的空deck
     #
     # 这里之所以要执行10次，是因为每次会把最后一空卡片deck删掉
     # 通过执行多次，可以删除嵌套层级很深的空deck
-    for i in range(15):
+    for i in range(10):
         print_first_level_log(f"尝试第 {i + 1} 次清理空deck")
         for deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
             if _get_deck_stats(deck_name)["total_in_deck"] == 0:
@@ -756,6 +817,8 @@ def forget_cards(block_list):
             data_uuid_to_md5[data_note["uuid"]] = data_note["md5_for_data"]
 
     for anki_deck in _get_all_valid_decks():
+        if anki_deck not in data:
+            continue
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
             deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5_for_data")
@@ -781,6 +844,14 @@ def suspend_and_unsuspend_cards(block_list):
         unsuspend_uuid_set = uuid_data["unsuspend_uuid_set"]
         suspend_uuid_set = uuid_data["suspend_uuid_set"]
         unsuspend_line_index = uuid_data["unsuspend_line_index"]
+        file_path = uuid_data["file_path"]
+
+        if unsuspend_line_index >= 0:
+            print_second_level_log(f"{deck_name}, 行号: {unsuspend_line_index + 1}")
+        
+        if if_found_in_file_path_cache(file_path):
+            # 如果不是新文件，则内容自上次未发生改变，不需要重新调用suspend和unsuspend
+            continue
 
         if len(unsuspend_uuid_set) == 0 and len(suspend_uuid_set) == 0:
             continue
@@ -793,8 +864,6 @@ def suspend_and_unsuspend_cards(block_list):
             if deck_note_uuid in suspend_uuid_set:
                 suspend_note_ids.append(deck_note["noteId"])
 
-        if unsuspend_line_index >= 0:
-            print_second_level_log(f"{deck_name} 存在休眠标记, 行号: {unsuspend_line_index + 1}")
 
         print_first_level_log(deck_name)
         unsuspend_card_ids = _get_card_ids_by_note_ids([deck_name], unsuspend_note_ids)

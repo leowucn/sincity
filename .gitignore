@@ -1,3 +1,4 @@
 .idea
 sync_anki_v2/__pycache__
 sync_anki_v2/data
+sync_anki_v2/.cache

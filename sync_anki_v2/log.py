@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import shutil
-from print_color import print
+import colorful as cf
 
 
 def print_dash_with_title(msg):
@@ -11,7 +11,8 @@ def print_dash_with_title(msg):
     # 获取终端窗口的宽度
     terminal_width, _ = shutil.get_terminal_size()
     star_number = int((terminal_width - len(msg)) / 2)
-    print(int(star_number) * '=' + msg + int(star_number) * '=', color='yellow')
+
+    print(cf.bold_green(star_number * '=' + msg + star_number * '='))
 
 
 def print_dash_with_title_for_end(msg):
@@ -20,15 +21,21 @@ def print_dash_with_title_for_end(msg):
     """
     # 获取终端窗口的宽度
     terminal_width, _ = shutil.get_terminal_size()
-    star_number = int((terminal_width - len(msg)) / 2)
-    print(int(star_number) * '=' + msg + int(star_number) * '=', color='green')
+    star_number = int((terminal_width - len(msg) - 5) / 2)
+    print(cf.bold_green(star_number * '=' + msg + star_number * '='))
 
 
 def print_first_level_log(msg):
-    print(msg, color='red')
+    print(cf.purple(msg))
 
 
 def print_second_level_log(msg):
-    max_length = 110
-    star_number = int((max_length - len(msg)) / 2)
-    print(int(star_number) * '*' + f" {msg} " + int(star_number) * '*', color='yellow')
+    star_number = 10
+    content = '\n' + star_number * '*' + f" {msg} " + star_number * '*' + '\n'
+
+    MY_COMPANY_PALETTE = {
+        'companyOrange': '#32a0d1',
+        'companyBaige': '#e8dcc5'
+    }
+    with cf.with_palette(MY_COMPANY_PALETTE) as c:
+        print(c.companyOrange_on_companyBaige(content))

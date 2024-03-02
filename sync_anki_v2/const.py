@@ -14,6 +14,9 @@ SUSPEND_FLAG = "==0=="
 # 卡片块的uuid行的格式是  <p>wpx: fwe2iex </p>
 UUID_FLAG = "wpx"
 
+# 缓存上次被修改的笔记文件列表
+CACHE_DIR = "./.cache"
+
 WHITE_LIST_DECKS = ["系统默认"]
 ANKI_CONNECT = "http://localhost:8765"
 MODEL_NAME = "KaTeX and Markdown Basic"
