@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import base64
+import time
+
 import requests
 from utils import *
 from log import *
@@ -254,7 +256,7 @@ def _create_deck_if_need(deck_name):
         if response.json()["error"]:
             raise RuntimeError(f"_create_deck_if_need 操作出错, deck_name: {deck_name}, err: {response.json()['error']}")
 
-        print_first_level_log(f"创建牌组, 牌组名称: {deck_name}")
+    print_first_level_log(f"创建牌组, 牌组名称: {deck_name}")
 
 
 def _delete_deck(deck_name):
@@ -382,7 +384,43 @@ def _change_deck(deck_name, note_ids):
     if response.json()["error"]:
         raise RuntimeError(f"_change_deck 操作出错, deck_name: {deck_name}, note_ids: {note_ids}, err: {response.json()['error']}")
 
-    print_first_level_log(f"_change_deck 笔记, note_ids: {note_ids}")
+    print_first_level_log(f"_change_deck 笔记, len(note_ids): {len(note_ids)}, deck_name: {deck_name}")
+
+
+def _gui_check_database():
+    """
+    检查数据库(调用后，anki会优化重建数据库)
+    """
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "guiCheckDatabase",
+                "version": 6,
+            }
+        ),
+    )
+
+    if response.json()["error"]:
+        raise RuntimeError(f"_gui_check_database 操作出错, err: {response.json()['error']}")
+
+
+def _reload_collection():
+    """
+    命令anki重新从数据库加载数据
+    """
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "reloadCollection",
+                "version": 6,
+            }
+        ),
+    )
+
+    if response.json()["error"]:
+        raise RuntimeError(f"_reload_collection 操作出错, err: {response.json()['error']}")
 
 
 def _extract_file_paths(text):
@@ -532,7 +570,6 @@ def create_deck_if_need(block_list):
         data[deck].append(block)
 
     for data_deck in data:
-        print_first_level_log(f"处理牌组: {data_deck}")
         _create_deck_if_need(data_deck)
 
 
@@ -551,12 +588,25 @@ def change_deck_note(block_list):
                 raise Exception("不允许笔记中出现重复uuid")
             data_uuid_to_deck[data_note["uuid"]] = data_deck
 
-    for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
+    new_deck_to_notes_ids = {}
+    for anki_deck in _get_all_valid_decks():
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
 
             if deck_note_uuid in data_uuid_to_deck and data_uuid_to_deck[deck_note_uuid] != anki_deck:
-                _change_deck(data_uuid_to_deck[deck_note_uuid], [deck_note["noteId"]])
+                if data_uuid_to_deck[deck_note_uuid] not in new_deck_to_notes_ids:
+                    new_deck_to_notes_ids[data_uuid_to_deck[deck_note_uuid]] = []
+                new_deck_to_notes_ids[data_uuid_to_deck[deck_note_uuid]].append(deck_note["noteId"])
+
+    for new_deck, note_ids in new_deck_to_notes_ids.items():
+        _change_deck(new_deck, note_ids)
+        _gui_check_database()
+        _reload_collection()
+
+        sleep_seconds = 2
+        if len(note_ids) > 100:
+            sleep_seconds = 3
+        time.sleep(sleep_seconds)
 
 
 def add_deck_note(block_list):
@@ -618,7 +668,43 @@ def _if_parent_deck(deck_name):
     return False
 
 
-def delete_deck_note(block_list, data_original_deck_list):
+def delete_note(block_list):
+    data = {}
+    for block in block_list:
+        deck = block["deck"]
+        if deck not in data:
+            data[deck] = []
+        data[deck].append(block)
+
+    cache = {}
+    for data_deck, data_note_list in data.items():
+        for data_note in data_note_list:
+            cache[data_note["uuid"]] = data_deck
+
+    anki_deck_list = _get_all_valid_decks()
+    for anki_deck in anki_deck_list:
+        for deck_note in _find_notes_by_deck(anki_deck):
+            deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
+            if deck_note_uuid not in cache:
+                # 删除无法找到的uuid的卡片
+                _delete_note(deck_note["noteId"])
+
+            # 如果卡片所在deck与data中的deck不一致则删除卡片
+            # 理论上在change_deck操作中应该成功迁移卡片
+            # 但是那个接口似乎有问题
+            if deck_note_uuid in cache and cache[deck_note_uuid] != anki_deck:
+                _delete_note(deck_note["noteId"])
+
+    # 测试发现父deck的卡片应该为0，如果不为0，则应该清理卡片
+    for deck_name in _get_all_valid_decks():
+        if not _if_parent_deck(deck_name):
+            continue
+        note_list = _find_notes_by_deck(deck_name)
+        for note in note_list:
+            _delete_note(note["noteId"])
+
+
+def delete_deck(block_list, data_original_deck_list):
     data = {}
     for block in block_list:
         deck = block["deck"]
@@ -638,24 +724,10 @@ def delete_deck_note(block_list, data_original_deck_list):
         for data_note in data_note_list:
             cache.add(data_note["uuid"])
 
-    anki_deck_list = _remove_prefix_deck_name(_get_all_valid_decks())
+    anki_deck_list = _get_all_valid_decks()
     for anki_deck in anki_deck_list:
-        if anki_deck not in data:
+        if anki_deck not in data and not _if_parent_deck(anki_deck):
             _delete_deck(anki_deck)
-            continue
-
-        for deck_note in _find_notes_by_deck(anki_deck):
-            deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
-            if deck_note_uuid not in cache:
-                _delete_note(deck_note["noteId"])
-
-    # 测试发现父deck的卡片应该为0，如果不为0，则应该清理卡片
-    for deck_name in _get_all_valid_decks():
-        if not _if_parent_deck(deck_name):
-            continue
-        note_list = _find_notes_by_deck(deck_name)
-        for note in note_list:
-            _delete_note(note["noteId"])
 
     # 删除没有卡片的空deck
     #
@@ -683,7 +755,8 @@ def forget_cards(block_list):
                 raise Exception("不允许笔记中出现重复uuid")
             data_uuid_to_md5[data_note["uuid"]] = data_note["md5_for_data"]
 
-    for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
+    # for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
+    for anki_deck in _get_all_valid_decks():
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
             deck_note_md5 = extract_value_from_str(deck_note["fields"]["Front"]["value"], "md5_for_data")
@@ -729,8 +802,6 @@ def suspend_and_unsuspend_cards(block_list):
         _unsuspend_card(unsuspend_card_ids)
         suspend_card_ids = _get_card_ids_by_note_ids([deck_name], suspend_note_ids)
         _suspend_card(suspend_card_ids)
-
-        print("\n")
 
 
 
