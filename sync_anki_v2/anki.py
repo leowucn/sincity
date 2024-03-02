@@ -112,7 +112,7 @@ def _get_card_id_by_note_id(deck_name_list, note_id):
         for card_info in card_info_list:
             if card_info["note"] == note_id:
                 return card_info["cardId"]
-    raise Exception(f"使用note_id: {note_id} 无法找到card. deck_name_list: {deck_name_list}")
+    raise RuntimeError(f"使用note_id: {note_id} 无法找到card. deck_name_list: {deck_name_list}")
 
 
 def _get_card_ids_by_note_ids(deck_name_list, note_ids):
@@ -365,7 +365,7 @@ def _change_deck(deck_name, note_ids):
         note_ids: 要移动的笔记的id列表
     """
     if not isinstance(note_ids, list):
-        raise Exception("note_ids字段请传递列表类型")
+        raise RuntimeError("note_ids字段请传递列表类型")
 
     response = requests.post(
         ANKI_CONNECT,
@@ -585,7 +585,7 @@ def change_deck_note(block_list):
     for data_deck, data_note_list in data.items():
         for data_note in data_note_list:
             if data_note["uuid"] in data_uuid_to_deck:
-                raise Exception("不允许笔记中出现重复uuid")
+                raise RuntimeError("不允许笔记中出现重复uuid")
             data_uuid_to_deck[data_note["uuid"]] = data_deck
 
     new_deck_to_notes_ids = {}
@@ -624,7 +624,7 @@ def add_deck_note(block_list):
         for anki_note in note_list:
             anki_note_uuid = extract_value_from_str(anki_note["fields"]["Front"]["value"], "uuid")
             if anki_note_uuid in uuid_set:
-                raise Exception(f"不允许笔记中出现重复的uuid, uuid: {anki_note_uuid}")
+                raise RuntimeError(f"不允许笔记中出现重复的uuid, uuid: {anki_note_uuid}")
             uuid_set.add(anki_note_uuid)
 
     for data_deck, data_note_list in data.items():
@@ -662,10 +662,10 @@ def update_deck_note(block_list):
 
 def _if_parent_deck(deck_name):
     target_count = deck_name.count("::")
-    for item in _remove_prefix_deck_name(_get_all_valid_decks()):
-        if item.startswith(deck_name) and item.count("::") > target_count:
-            return True
-    return False
+    return any(
+        item.startswith(deck_name) and item.count("::") > target_count
+        for item in _remove_prefix_deck_name(_get_all_valid_decks())
+    )
 
 
 def delete_note(block_list):
@@ -720,7 +720,7 @@ def delete_deck(block_list, data_original_deck_list):
         _delete_deck(deck_name)
 
     cache = set()
-    for data_deck, data_note_list in data.items():
+    for data_note_list in data.values():
         for data_note in data_note_list:
             cache.add(data_note["uuid"])
 
@@ -755,7 +755,6 @@ def forget_cards(block_list):
                 raise RuntimeError("不允许笔记中出现重复uuid")
             data_uuid_to_md5[data_note["uuid"]] = data_note["md5_for_data"]
 
-    # for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):
     for anki_deck in _get_all_valid_decks():
         for deck_note in _find_notes_by_deck(anki_deck):
             deck_note_uuid = extract_value_from_str(deck_note["fields"]["Front"]["value"], "uuid")
