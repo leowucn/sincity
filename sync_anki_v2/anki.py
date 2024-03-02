@@ -749,10 +749,10 @@ def forget_cards(block_list):
         data[deck].append(block)
 
     data_uuid_to_md5 = {}
-    for data_deck, data_note_list in data.items():
+    for data_note_list in data.values():
         for data_note in data_note_list:
             if data_note["uuid"] in data_uuid_to_md5:
-                raise Exception("不允许笔记中出现重复uuid")
+                raise RuntimeError("不允许笔记中出现重复uuid")
             data_uuid_to_md5[data_note["uuid"]] = data_note["md5_for_data"]
 
     # for anki_deck in _remove_prefix_deck_name(_get_all_valid_decks()):

@@ -10,6 +10,8 @@ from utils import *
 
 
 def sync():
+    start_time = time.time()
+
     print_dash_with_title(" total files ")
     path_list = get_files()
     # 调整文件内容。比如自动增加uuid行
@@ -61,7 +63,7 @@ def sync():
     blocks = get_blocks()
     suspend_and_unsuspend_cards(blocks)
 
-    print_dash_with_title_for_end(" END ")
+    print_dash_with_title_for_end(f" END. 耗时: {time.time() - start_time:.2f} s")
 
 
 if __name__ == '__main__':
