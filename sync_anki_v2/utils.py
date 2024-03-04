@@ -6,8 +6,6 @@ import json
 import uuid
 import shutil
 import re
-import colorful as cf
-
 from const import *
 
 
@@ -275,4 +273,3 @@ def get_configured_file_path_part_number():
         if item.strip():
             num += 1
     return num
-

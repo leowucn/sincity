@@ -3,7 +3,6 @@
 
 import base64
 import time
-from regex import W
 
 import requests
 from get_files import get_file_path_list, get_no_exist_file_path_list, if_found_in_file_path_cache
@@ -836,8 +835,8 @@ def suspend_and_unsuspend_cards(block_list):
             data[deck] = []
         data[deck].append(block)
 
-    uuid_dict = get_unsuspend_and_suspend_uuid_list()
-    for deck_name, uuid_data in uuid_dict.items():
+    uuid_data_list = get_unsuspend_and_suspend_uuid_list()
+    for uuid_data in uuid_data_list:
         unsuspend_note_ids = []
         suspend_note_ids = []
 
@@ -845,9 +844,12 @@ def suspend_and_unsuspend_cards(block_list):
         suspend_uuid_set = uuid_data["suspend_uuid_set"]
         unsuspend_line_index = uuid_data["unsuspend_line_index"]
         file_path = uuid_data["file_path"]
+        line_count = uuid_data["line_count"]
+        percent = uuid_data["percent"]
+        deck_name = uuid_data["deck"]
 
         if unsuspend_line_index >= 0:
-            print_second_level_log(f"{deck_name}, 行号: {unsuspend_line_index + 1}")
+            print_second_level_log(f"{deck_name}, 行号: {unsuspend_line_index + 1}, 总行数: {line_count}, 百分比: {percent}")
         
         if if_found_in_file_path_cache(file_path):
             # 如果不是新文件，则内容自上次未发生改变，不需要重新调用suspend和unsuspend
@@ -863,7 +865,6 @@ def suspend_and_unsuspend_cards(block_list):
 
             if deck_note_uuid in suspend_uuid_set:
                 suspend_note_ids.append(deck_note["noteId"])
-
 
         print_first_level_log(deck_name)
         unsuspend_card_ids = _get_card_ids_by_note_ids([deck_name], unsuspend_note_ids)

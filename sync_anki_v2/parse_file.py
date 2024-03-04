@@ -361,11 +361,11 @@ def get_blocks(all_block=True):
 def get_unsuspend_and_suspend_uuid_list():
     """
     获取unsuspend和suspend的uuid列表
-    注意，会返回两个值，一个是unsuspend的uuid列表，一个是suspend的uuid列表
+    注意,会返回两个值,一个是unsuspend的uuid列表,一个是suspend的uuid列表
     """
     path_list = get_all_file_path_list()
 
-    result = {}
+    result = []
 
     for file_path in path_list:
         all_uuid_set = set()
@@ -383,12 +383,19 @@ def get_unsuspend_and_suspend_uuid_list():
 
             if UUID_FLAG in line and unsuspend_line_index == -1:
                 unsuspend_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
+        
+        percent = 0
+        if unsuspend_line_index > -1:
+            percent = round((unsuspend_line_index + 1) / len(lines), 2)
 
-        result[convert_file_path_to_anki_deck_name(file_path)] = {
+        result.append({
+            "deck": convert_file_path_to_anki_deck_name(file_path),
             "unsuspend_uuid_set": unsuspend_uuid_set,
             "suspend_uuid_set": all_uuid_set.difference(unsuspend_uuid_set),
             "unsuspend_line_index": unsuspend_line_index,
-            "file_path": file_path
-        }
-
-    return result
+            "file_path": file_path,
+            "line_count": len(lines),
+            "percent": percent
+        })
+    
+    return sorted(result, key=lambda x: (-x["percent"], x["file_path"]))

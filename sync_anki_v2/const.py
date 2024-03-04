@@ -11,7 +11,7 @@ END_FLAG = "==3=="
 SUSPEND_FLAG = "==0=="
 
 # 卡片块的uuid
-# 卡片块的uuid行的格式是  <p>wpx: fwe2iex </p>
+# 卡片块的uuid行的格式是
 UUID_FLAG = "wpx"
 
 # 缓存上次被修改的笔记文件列表
@@ -22,7 +22,8 @@ ANKI_CONNECT = "http://localhost:8765"
 MODEL_NAME = "KaTeX and Markdown Basic"
 ATTACHMENT_DIR = "资产"
 # 视频格式
-VIDEO_FORMATS = {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".3gp"}
+VIDEO_FORMATS = {".mp4", ".avi", ".mkv", ".mov",
+                 ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".3gp"}
 
 OB_NOTE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob"
 ROOT_IMAGE_PATH = "/Users/wupeng/Library/Mobile Documents/iCloud~md~obsidian/Documents/ob/资产"
