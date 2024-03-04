@@ -31,7 +31,7 @@ def print_first_level_log(msg):
 
 def print_second_level_log(msg):
     star_number = 10
-    content = '\n' + star_number * '*' + f" {msg} " + star_number * '*' + '\n'
+    content = star_number * '*' + f" {msg} " + star_number * '*'
 
     MY_COMPANY_PALETTE = {
         'companyOrange': '#32a0d1',
@@ -39,3 +39,4 @@ def print_second_level_log(msg):
     }
     with cf.with_palette(MY_COMPANY_PALETTE) as c:
         print(c.companyOrange_on_companyBaige(content))
+        print()
