@@ -15,21 +15,31 @@ def _extract_image_src(str_data):
     return re.findall(r"<img.+?src=['\"](.+?)['\"].*?>", str_data)
 
 
-def _store_media_file(image_path):
-    # 上传图片
-    with open(image_path, "rb") as f:
-        image_data = f.read()
-    image_data_base64 = base64.b64encode(image_data).decode()
+def _store_media_file(media_path):
+    ext_format = os.path.splitext(media_path)[1].lower()
 
-    # Construct request data
-    request_data = {
-        "action": "storeMediaFile",
-        "version": 6,
-        "params": {
-            "data": image_data_base64,
-            "filename": image_path,
-        },
-    }
+    if ext_format in VIDEO_FORMATS:
+        request_data = {
+            "action": "storeMediaFile",
+            "version": 6,
+            "params": {
+                "path": media_path,
+                "filename": os.path.basename(media_path),
+            },
+        }
+    else:
+        with open(media_path, "rb") as f:
+            image_data = f.read()
+        image_data_base64 = base64.b64encode(image_data).decode()
+
+        request_data = {
+            "action": "storeMediaFile",
+            "version": 6,
+            "params": {
+                "data": image_data_base64,
+                "filename": media_path,
+            },
+        }
     response = requests.post(f"{ANKI_CONNECT}/action", json=request_data)
     return response.json()["result"] if response.ok else None
 
@@ -520,35 +530,35 @@ def _modify_file_path(original_path):
 
 
 def _prepare_value(answer):
-    image_info_list = _extract_image_tags(answer)
+    media_info_list = _extract_image_tags(answer)
 
-    for md_img_tag in image_info_list:
-        image_file_name_list = _extract_file_paths(md_img_tag)
-        if not image_file_name_list:
+    for md_media_tag in media_info_list:
+        media_file_name_list = _extract_file_paths(md_media_tag)
+        if not media_file_name_list:
             continue
-        image_file_name = image_file_name_list[0]
-        if not image_file_name:
+        media_file_name = media_file_name_list[0]
+        if not media_file_name:
             continue
 
-        ext_format = os.path.splitext(image_file_name)[1]
+        if media_file_name.startswith(ATTACHMENT_DIR):
+            # Local images plus这个插件会自动给图片路径添加资产目录名
+            # 因此这里需要特殊处理
+            media_file_name = media_file_name[len(ATTACHMENT_DIR) + 1:]
+
+        media_file_path = os.path.join(ROOT_IMAGE_PATH, media_file_name)
+        if not os.path.exists(media_file_path):
+            media_file_path = _modify_file_path(media_file_path)
+        media_url = _store_media_file(media_file_path)
+
+        ext_format = os.path.splitext(media_file_name)[1].lower()
         if ext_format in VIDEO_FORMATS:
-            info = "<p style='color: red'> 视频格式文件忽略上传 </p>"
-            answer = answer.replace(md_img_tag, info)
-            print_first_level_log("已忽略视频文件: ", image_file_name)
+            # 视频
+            media_tag = f"<video width='150' height='150' controls><source src='{media_url}' type='video/mp4'></video>"
         else:
-            if image_file_name.startswith(ATTACHMENT_DIR):
-                # Local images plus这个插件会自动给图片路径添加资产目录名
-                # 因此这里需要特殊处理
-                image_file_name = image_file_name[len(ATTACHMENT_DIR) + 1:]
-
-            image_path = os.path.join(ROOT_IMAGE_PATH, image_file_name)
-            if not os.path.exists(image_path):
-                image_path = _modify_file_path(image_path)
-            image_url = _store_media_file(image_path)
-
-            img_tag = f"<img src='{image_url}'>"
-
-            answer = answer.replace(md_img_tag, img_tag)
+            # 图片
+            media_tag = f"<img src='{media_url}'>"
+        
+        answer = answer.replace(md_media_tag, media_tag)
     return answer
 
 
