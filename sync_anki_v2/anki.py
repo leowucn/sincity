@@ -5,7 +5,7 @@ import base64
 import time
 
 import requests
-from get_files import get_file_path_list, get_no_exist_file_path_list, if_found_in_file_path_cache
+from get_files import get_file_path_list, get_no_exist_file_path_list, if_file_changed
 from utils import *
 from log import *
 from parse_file import get_unsuspend_and_suspend_uuid_list
@@ -861,7 +861,7 @@ def suspend_and_unsuspend_cards(block_list):
         if unsuspend_line_index >= 0:
             print_second_level_log(f"{deck_name}, 行号: {unsuspend_line_index + 1}, 总行数: {line_count}, 百分比: {percent}")
         
-        if if_found_in_file_path_cache(file_path):
+        if not if_file_changed(file_path):
             # 如果不是新文件，则内容自上次未发生改变，不需要重新调用suspend和unsuspend
             continue
 
@@ -879,6 +879,7 @@ def suspend_and_unsuspend_cards(block_list):
         print_first_level_log(deck_name)
         unsuspend_card_ids = _get_card_ids_by_note_ids([deck_name], unsuspend_note_ids)
         _unsuspend_card(unsuspend_card_ids)
+
         suspend_card_ids = _get_card_ids_by_note_ids([deck_name], suspend_note_ids)
         _suspend_card(suspend_card_ids)
 

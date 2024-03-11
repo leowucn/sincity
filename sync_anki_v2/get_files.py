@@ -117,10 +117,13 @@ def get_all_file_path_list():
     return _get_path_list()
 
 
-def if_found_in_file_path_cache(target_file_path):
+def if_file_changed(target_file_path):
     """从当前文件路径列表中查找文件 (考虑了缓存)
 
     如果找到了，说明文件已经被修改，是新文件
     """
     curr_cache = _read_file_path_cache()
-    return target_file_path in curr_cache
+    if target_file_path not in curr_cache:
+        return True
+
+    return _get_file_mtime(target_file_path) != curr_cache[target_file_path]
