@@ -876,7 +876,6 @@ def suspend_and_unsuspend_cards(block_list):
             if deck_note_uuid in suspend_uuid_set:
                 suspend_note_ids.append(deck_note["noteId"])
 
-        print_first_level_log(deck_name)
         unsuspend_card_ids = _get_card_ids_by_note_ids([deck_name], unsuspend_note_ids)
         _unsuspend_card(unsuspend_card_ids)
 
