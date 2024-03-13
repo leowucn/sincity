@@ -74,7 +74,8 @@ def _get_blocks(file_path):
 
 
 def _get_backend_value(block_lines):
-    return second_delimiter_for_card() + "\n---\n" + "\n".join(block_lines) + "<br><br>" + third_delimiter_for_card()
+    # return second_delimiter_for_card() + "\n---\n" + "\n".join(block_lines) + "<br><br>" + third_delimiter_for_card()
+    return third_delimiter_for_card() + "\n---\n" + "\n".join(block_lines) + "<br><br>" + third_delimiter_for_card()
 
 
 def _get_file_path_value(file_path):
@@ -92,13 +93,13 @@ def _add_meta_info(file_path, blocks):
     for block in blocks:
         uuid_str = _find_block_uuid(file_path, block)
         title_path = _find_title_path(block[0][0], lines, code_blocks)
-        front_title, front_lines, back_lines = _parse_block(block)
+        front_title, front_content, back_content = _parse_block(block)
 
         item = {
             # front_title不允许重复，如果重复则报错
             "front_title": front_title,
-            "front_content": "\n".join(front_lines),
-            "back_content": _get_backend_value(back_lines),
+            "front_content": front_content,
+            "back_content": back_content,
             "title_path": title_path,
             "file_path": _get_file_path_value(file_path),
             "deck": convert_file_path_to_anki_deck_name(file_path).replace(" ", "_"),
@@ -314,6 +315,9 @@ def _parse_block(block):
     for i in range(len(back_content)):
         if back_content[i].startswith("````"):
             back_content[i] = ad_line() + "\n"
+    
+    front_content = "\n".join(front_content) 
+    back_content = _get_backend_value(back_content)
 
     return front_title, front_content, back_content
 

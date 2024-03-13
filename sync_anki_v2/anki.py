@@ -483,6 +483,24 @@ def _reload_collection():
         raise RuntimeError(f"_reload_collection 操作出错, err: {response.json()['error']}")
 
 
+def _sync_with_anki():
+    """
+    和ankiweb同步数据
+    """
+    response = requests.post(
+        ANKI_CONNECT,
+        json.dumps(
+            {
+                "action": "sync",
+                "version": 6,
+            }
+        ),
+    )
+
+    if response.json()["error"]:
+        raise RuntimeError(f"_sync_with_anki 操作出错, err: {response.json()['error']}")
+
+
 def _extract_file_paths(text):
     # 匹配形如 ![[...]], ![](...)
     pattern = re.compile(r"\!\[\[.*?\]\]|\!\[\][\(\[].*?[\)\]]|\!\[.*?\]\([^\)]+\)")
@@ -881,5 +899,8 @@ def suspend_and_unsuspend_cards(block_list):
         suspend_card_ids = _get_card_ids_by_note_ids([deck_name], suspend_note_ids)
         _suspend_card(suspend_card_ids)
 
+
+def sync_with_anki():
+    _sync_with_anki()
 
 

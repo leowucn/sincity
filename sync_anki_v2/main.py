@@ -54,6 +54,9 @@ def sync():
     print_dash_with_title(" suspend_and_unsuspend ")
     suspend_and_unsuspend_cards(blocks)
 
+    print_dash_with_title(" sync_with_anki ")
+    sync_with_anki()
+
     # 更新文件缓存
     update_file_path_cache()
 
