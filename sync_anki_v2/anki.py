@@ -598,12 +598,11 @@ def _remove_prefix_deck_name(deck_list):
     deck_list = sorted(deck_list)
 
     for index in range(len(deck_list)):
-        found_prefix = False
-        for index1 in range(index + 1, len(deck_list)):
-            if deck_list[index1].startswith(deck_list[index]) and deck_list[index1].count("::") != deck_list[index].count("::"):
-                found_prefix = True
-                break
-
+        found_prefix = any(
+            deck_list[index1].startswith(deck_list[index])
+            and deck_list[index1].count("::") != deck_list[index].count("::")
+            for index1 in range(index + 1, len(deck_list))
+        )
         if not found_prefix:
             res.append(deck_list[index])
     return sorted(res)
