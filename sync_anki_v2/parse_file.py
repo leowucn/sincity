@@ -310,6 +310,14 @@ def _parse_block(block):
     back_content = _trim_lines(back_content)
     back_content = _trim_uuid_line(back_content)
 
+    ad_prefix = "````ad-"
+    for i in range(len(front_content)):
+        if front_content[i].startswith("title") and i > 0 and front_content[i-1].startswith(ad_prefix):
+            front_content[i] = "==" + front_content[i] + "=="
+    for i in range(len(back_content)):
+        if back_content[i].startswith("title") and i > 0 and back_content[i-1].startswith(ad_prefix):
+            back_content[i] = "==" + back_content[i] + "=="
+
     # 将ad-note插件的形式转换为方便在卡片中显示的形式
     # 仍旧会包裹内容
     for i in range(len(back_content)):
