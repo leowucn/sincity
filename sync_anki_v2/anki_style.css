@@ -49,27 +49,33 @@ pre code {
 
 /* 标题样式 */
 h1 {
-    color: #FBA61C;
+    color: #7a17ce;
+    font-size: 25px;
 }
 
 h2 {
     color: #F2453F;
+    font-size: 23px;
 }
 
 h3 {
     color: #5096F4;
+    font-size: 21px;
 }
 
 h4 {
     color: #36BA77;
+    font-size: 20px;
 }
 
 h5 {
     color: #DB6363;
+    font-size: 20px;
 }
 
 h6 {
     color: #6860F9;
+    font-size: 20px;
 }
 
 strong {
@@ -82,9 +88,7 @@ blockquote {
 
 blockquote::before,
 blockquote::after {
-    content: "-------------------------------";
     display: block;
-
 }
 
 em {
