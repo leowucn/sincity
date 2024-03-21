@@ -6,12 +6,85 @@ from const import *
 from get_files import get_all_file_path_list, get_file_path_list
 
 
+def _get_raw_blocks(file_path):
+    line_list = get_file_lines(file_path)
+
+    split_parts = []
+    sublist = []
+
+    for index in range(len(line_list)):
+        if END_FLAG in line_list[index]:
+            if not sublist:
+                continue
+
+            split_parts.append(sublist)
+            sublist = []
+        else:
+            sublist.append((index, line_list[index]))
+
+    blocks = []
+
+    for part in split_parts:
+        start_flag_index = -1
+        for index, line_info in enumerate(part):
+            if START_FLAG in line_info[1]:
+                start_flag_index = index
+
+            if start_flag_index > 0:
+                title_index = -1
+                for index1 in range(start_flag_index - 1, -1, -1):
+                    if part[index1][1].strip():
+                        title_index = index1
+                        break
+                if title_index < 0:
+                    raise Exception("无法找到块起始位置")
+
+                lines1 = []
+                for line1 in part[title_index:]:
+                    # if START_FLAG in line1[1]:
+                    #     continue
+                    lines1.append(line1)
+                blocks.append(lines1)
+                break
+
+        if start_flag_index < 0:
+            raise Exception(f"格式错误，无法找到块标题. 块起始行: {part[0][0]}, 文件: {file_path}")
+
+    return trim_blocks(blocks)
+
+
+def _check_blocks(file_path, blocks):
+    for block in blocks:
+        tmp = []
+        for index, line_info in enumerate(block):
+            if START_FLAG in line_info[1] or CONTENT_FLAG in line_info[1] or END_FLAG in line_info[1]:
+                tmp.append(line_info[1].strip())
+        if len(tmp) not in [2, 3]:
+            raise Exception(f"块标记格式不对. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+        if len(tmp) == 3:
+            if tmp[0] != START_FLAG or tmp[1] != CONTENT_FLAG or tmp[2] != END_FLAG:
+                raise Exception(f"请使用s c e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+        if len(tmp) == 2:
+            if tmp[0] != START_FLAG or tmp[1] != END_FLAG:
+                raise Exception(f"请使用s e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+
+        for index, line_info in enumerate(block):
+            if index <= 1 or index == len(block) - 1:
+                continue
+
+            if START_FLAG in line_info[1]:
+                raise Exception(f"不允许嵌套块起始标记. 块起始行索引: {line_info[0]}, 内容: {line_info[1]}")
+            if END_FLAG in line_info[1]:
+                raise Exception(f"不允许嵌套块结束标记. 块起始行索引: {line_info[0]}, 内容: {line_info[1]}")
+
+
 def _get_blocks(file_path):
     """
     解析文件并获取卡片块。
 
     注意，文件块的前后空白行已经被去掉
     """
+<<<<<<< Updated upstream
     split_blocks = split_list_by_element(file_path, END_FLAG, False)
     if not split_blocks:
         return []
@@ -70,6 +143,10 @@ def _get_blocks(file_path):
             if END_FLAG in line:
                 raise RuntimeError(f"不允许嵌套块结束标记. 内容: {line}")
 
+=======
+    blocks = _get_raw_blocks(file_path)
+    _check_blocks(file_path, blocks)
+>>>>>>> Stashed changes
     return _add_meta_info(file_path, blocks)
 
 
@@ -85,15 +162,33 @@ def _get_file_path_value(file_path):
     return file_path.replace("/", " / ")
 
 
+def _is_markdown_heading(text):
+    # 使用正则表达式匹配Markdown标题格式
+    pattern = r'^#{1,6}\s+.+$'
+    if re.match(pattern, text):
+        return True
+    else:
+        return False
+
+
 def _add_meta_info(file_path, blocks):
     lines = get_file_lines(file_path)
     code_blocks = _get_code_blocks(lines)
 
+    all_title_path = []
+    for i in range(len(lines)):
+        if _is_markdown_heading(lines[i]):
+            all_title_path.append((i, lines[i]))
+
+
     res = []
     for block in blocks:
-        uuid_str = _find_block_uuid(file_path, block)
         title_path = _find_title_path(block[0][0], lines, code_blocks)
+<<<<<<< Updated upstream
         front_title, front_content, back_content = _parse_block(block)
+=======
+        front_title, front_title_index, front_lines, back_lines = _parse_block(block)
+>>>>>>> Stashed changes
 
         item = {
             # front_title不允许重复，如果重复则报错
@@ -103,7 +198,7 @@ def _add_meta_info(file_path, blocks):
             "title_path": title_path,
             "file_path": _get_file_path_value(file_path),
             "deck": convert_file_path_to_anki_deck_name(file_path).replace(" ", "_"),
-            "uuid": uuid_str,
+            "uuid": _find_block_uuid(file_path, block),
         }
         # md5_for_data 是根据卡片中真正的数据计算出来的
         # 如果 md5_for_data 变化，说明卡片需要重新被记忆，因此相关的代码逻辑会重置卡片的记忆次数
@@ -286,26 +381,30 @@ def _parse_block(block):
     front_content = []
     back_content = []
 
-    start_index = -1
-    content_index = -1
+    start_flag_index = -1
+    content_flag_index = -1
+
     for index, line_info in enumerate(block):
         if START_FLAG in line_info[1]:
-            start_index = index
+            start_flag_index = index
 
         if CONTENT_FLAG in line_info[1]:
-            content_index = index
+            content_flag_index = index
+        
+        if start_flag_index >= 0 and content_flag_index >= 0:
+            break
 
-    if content_index > 0:
-        for line_info in block[start_index + 1:content_index]:
+    if content_flag_index > 0:
+        for line_info in block[start_flag_index + 1:content_flag_index]:
             front_content.append(line_info[1].rstrip())
 
     back_index = -1
-    if content_index > 0:
-        back_index = content_index + 1
+    if content_flag_index > 0:
+        back_index = content_flag_index + 1
     else:
-        back_index = start_index + 1
+        back_index = start_flag_index + 1
 
-    for line_info in block[back_index:len(block) - 1]:
+    for line_info in block[back_index:]:
         back_content.append(line_info[1].rstrip())
     back_content = _trim_lines(back_content)
     back_content = _trim_uuid_line(back_content)
@@ -327,7 +426,7 @@ def _parse_block(block):
     front_content = "\n".join(front_content) 
     back_content = _get_backend_value(back_content)
 
-    return front_title, front_content, back_content
+    return front_title, block[0][0], front_content, back_content
 
 
 def _cal_md5_for_block(block):
