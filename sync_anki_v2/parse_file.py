@@ -17,6 +17,7 @@ def _get_raw_blocks(file_path):
             if not sublist:
                 continue
 
+            sublist.append((index, line_list[index]))
             split_parts.append(sublist)
             sublist = []
         else:
@@ -37,7 +38,7 @@ def _get_raw_blocks(file_path):
                         title_index = index1
                         break
                 if title_index < 0:
-                    raise Exception("无法找到块起始位置")
+                    raise RuntimeError("无法找到块起始位置")
 
                 lines1 = []
                 for line1 in part[title_index:]:
@@ -48,7 +49,7 @@ def _get_raw_blocks(file_path):
                 break
 
         if start_flag_index < 0:
-            raise Exception(f"格式错误，无法找到块标题. 块起始行: {part[0][0]}, 文件: {file_path}")
+            raise RuntimeError(f"格式错误，无法找到块标题. 块起始行: {part[0][0]}, 文件: {file_path}")
 
     return trim_blocks(blocks)
 
@@ -57,25 +58,28 @@ def _check_blocks(file_path, blocks):
     for block in blocks:
         tmp = []
         for index, line_info in enumerate(block):
-            if START_FLAG in line_info[1] or CONTENT_FLAG in line_info[1] or END_FLAG in line_info[1]:
-                tmp.append(line_info[1].strip())
+            if START_FLAG in line_info[1]:
+                tmp.append(START_FLAG)
+            if CONTENT_FLAG in line_info[1]:
+                tmp.append(CONTENT_FLAG)
+            if END_FLAG in line_info[1]:
+                tmp.append(END_FLAG)
+        
         if len(tmp) not in [2, 3]:
-            raise Exception(f"块标记格式不对. 块起始行索引: {block[0][0]}, 文件: {file_path}")
-        if len(tmp) == 3:
-            if tmp[0] != START_FLAG or tmp[1] != CONTENT_FLAG or tmp[2] != END_FLAG:
-                raise Exception(f"请使用s c e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
-        if len(tmp) == 2:
-            if tmp[0] != START_FLAG or tmp[1] != END_FLAG:
-                raise Exception(f"请使用s e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+            raise RuntimeError(f"块标记格式不对. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+        if len(tmp) == 3 and (tmp[0] != START_FLAG or tmp[1] != CONTENT_FLAG or tmp[2] != END_FLAG):
+            raise RuntimeError(f"请使用s c e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
+        if len(tmp) == 2 and (tmp[0] != START_FLAG or tmp[1] != END_FLAG):
+            raise RuntimeError(f"请使用s e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
 
         for index, line_info in enumerate(block):
             if index <= 1 or index == len(block) - 1:
                 continue
 
             if START_FLAG in line_info[1]:
-                raise Exception(f"不允许嵌套块起始标记. 块起始行索引: {line_info[0]}, 内容: {line_info[1]}")
+                raise RuntimeError(f"不允许嵌套块起始标记. 块起始行索引: {line_info[0]}, 文件路径: {file_path}")
             if END_FLAG in line_info[1]:
-                raise Exception(f"不允许嵌套块结束标记. 块起始行索引: {line_info[0]}, 内容: {line_info[1]}")
+                raise RuntimeError(f"不允许嵌套块结束标记. 块起始行索引: {line_info[0]}, 文件路径: {file_path}")
 
 
 def _get_blocks(file_path):
@@ -84,69 +88,8 @@ def _get_blocks(file_path):
 
     注意，文件块的前后空白行已经被去掉
     """
-<<<<<<< Updated upstream
-    split_blocks = split_list_by_element(file_path, END_FLAG, False)
-    if not split_blocks:
-        return []
-
-    blocks = []
-
-    for block in split_blocks:
-        if not block:
-            continue
-
-        title_index = -1
-        for index, line_info in enumerate(block):
-            if START_FLAG in line_info[1]:
-                title_index = index
-
-            if title_index >= 0:
-                start_index = -1
-                for index1 in range(title_index - 1, -1, -1):
-                    if block[index1][1].strip():
-                        start_index = index1
-                        break
-                if start_index < 0:
-                    raise RuntimeError("无法找到块起始位置")
-
-                lines1 = []
-                for line1 in block[start_index:]:
-                    lines1.append(line1)
-                blocks.append(lines1)
-                break
-
-        if title_index < 0:
-            raise RuntimeError(f"格式错误，无法找到块标题. 块起始行: {block[0][0]}, 文件: {file_path}")
-
-    blocks = trim_blocks(blocks)
-    for block in blocks:
-        tmp = []
-        for index, line_info in enumerate(block):
-            if START_FLAG in line_info[1] or CONTENT_FLAG in line_info[1] or END_FLAG in line_info[1]:
-                tmp.append(line_info[1].strip())
-        if len(tmp) != 3 and len(tmp) != 2:
-            raise RuntimeError(f"不允许重复或者嵌套块边界标记. 块起始行索引: {block[0][0]}, 文件: {file_path}")
-        if len(tmp) == 3:
-            if tmp[0] != START_FLAG or tmp[1] != CONTENT_FLAG or tmp[2] != END_FLAG:
-                raise RuntimeError(f"请使用s c e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
-        if len(tmp) == 2:
-            if tmp[0] != START_FLAG or tmp[1] != END_FLAG:
-                raise RuntimeError(f"请使用s e的顺序组织块内容. 块起始行索引: {block[0][0]}, 文件: {file_path}")
-
-    for block in blocks:
-        for index, line in enumerate(block):
-            if index <= 1 or index == len(block) - 1:
-                continue
-
-            if START_FLAG in line:
-                raise RuntimeError(f"不允许嵌套块起始标记. 内容: {line}")
-            if END_FLAG in line:
-                raise RuntimeError(f"不允许嵌套块结束标记. 内容: {line}")
-
-=======
     blocks = _get_raw_blocks(file_path)
     _check_blocks(file_path, blocks)
->>>>>>> Stashed changes
     return _add_meta_info(file_path, blocks)
 
 
@@ -165,30 +108,62 @@ def _get_file_path_value(file_path):
 def _is_markdown_heading(text):
     # 使用正则表达式匹配Markdown标题格式
     pattern = r'^#{1,6}\s+.+$'
-    if re.match(pattern, text):
-        return True
+    return bool(re.match(pattern, text))
+
+
+def _count_hashes(text):
+    # 使用正则表达式匹配标题
+    pattern = r'^(#+)'  # 匹配以一个或多个#号开头的行
+    if matches := re.match(pattern, text, re.MULTILINE):
+        # 提取匹配到的第一个标题中#的数量
+        return len(matches.group(1))
     else:
-        return False
+        return 0
 
 
 def _add_meta_info(file_path, blocks):
     lines = get_file_lines(file_path)
-    code_blocks = _get_code_blocks(lines)
+    code_block_list = _get_code_blocks(lines)
 
     all_title_path = []
     for i in range(len(lines)):
         if _is_markdown_heading(lines[i]):
-            all_title_path.append((i, lines[i]))
+            found = False
+            for code_block in code_block_list:
+                if code_block[0] <= i <= code_block[1]:
+                    found = True
+                    break
+            if not found:
+                all_title_path.append((i, lines[i]))
+    all_title_path.reverse()
 
+    def get_title_path(start_index):
+        """start_index是当前标题的索引. 从该所以开始寻找标题路径
+        """
+        title_path = []
+        dash_count = []
+        for item in all_title_path:
+            if item[0] > start_index:
+                continue
 
+            if not title_path:
+                title_path.append(_get_pure_title(item[1]))
+                dash_count.append(_count_hashes(item[1]))
+            else:
+                curr_hash_count = _count_hashes(item[1])
+                if curr_hash_count == 1:
+                    title_path.append(_get_pure_title(item[1]))
+                    return title_path
+                if curr_hash_count >= dash_count[-1]:
+                    continue
+                title_path.append(_get_pure_title(item[1]))
+                dash_count.append(_count_hashes(item[1]))
+        return title_path
+        
     res = []
     for block in blocks:
-        title_path = _find_title_path(block[0][0], lines, code_blocks)
-<<<<<<< Updated upstream
+        title_path = get_title_path(block[0][0])
         front_title, front_content, back_content = _parse_block(block)
-=======
-        front_title, front_title_index, front_lines, back_lines = _parse_block(block)
->>>>>>> Stashed changes
 
         item = {
             # front_title不允许重复，如果重复则报错
@@ -276,55 +251,8 @@ def _get_code_blocks(lines):
     return code_blocks
 
 
-def _extract_hash_count(title):
-    if title.startswith('#'):
-        count = 0
-        for char in title:
-            if char == '#':
-                count += 1
-            else:
-                break
-        return count
-    else:
-        return 0
-
-
 def _get_pure_title(raw_title):
     return raw_title.strip("#").strip()
-
-
-def _find_title_path(curr_index, lines, code_blocks):
-    title_list = []
-    for i in range(curr_index, -1, -1):
-        hit_code = False
-        for code_block in code_blocks:
-            if code_block[0] < i < code_block[1]:
-                hit_code = True
-                break
-
-        if hit_code:
-            continue
-
-        curr_line = lines[i].strip()
-        if not curr_line.startswith("#") or not curr_line:
-            continue
-
-        title_list.append(curr_line)
-
-    res = []
-    if len(title_list) > 0:
-        res.append(_get_pure_title(title_list[0]))
-    for i in range(1, len(title_list), 1):
-        curr_sharp_count = title_list[i].count("#")
-        pre_sharp_count = title_list[i - 1].count("#")
-
-        if curr_sharp_count > pre_sharp_count:
-            break
-
-        if curr_sharp_count < pre_sharp_count:
-            res.append(_get_pure_title(title_list[i]))
-
-    return res
 
 
 def _find_block_uuid(file_path, block):
@@ -332,8 +260,8 @@ def _find_block_uuid(file_path, block):
     查找block中的uuid
     """
     for line_info in block:
-        if UUID_FLAG in line_info[1]:
-            return extract_value_from_str(line_info[1], UUID_FLAG)
+        if END_FLAG in line_info[1]:
+            return line_info[1].split()[1].strip()
     raise RuntimeError(f"无法找到uuid. 文件: {file_path}, 行: {block[0][0]}")
 
 
@@ -358,19 +286,6 @@ def _trim_lines(lines):
         return lines[start_index:end_index + 1]
 
     return []
-
-
-def _trim_uuid_line(lines):
-    """
-    uuid行不需要在anki中显示
-    """
-    for index in range(len(lines) - 1, -1, -1):
-        if UUID_FLAG in lines[index]:
-            lines.pop(index)
-            if lines[index-1].strip() == "---":
-                lines.pop(index-1)
-            break
-    return lines
 
 
 def _parse_block(block):
@@ -404,10 +319,9 @@ def _parse_block(block):
     else:
         back_index = start_flag_index + 1
 
-    for line_info in block[back_index:]:
+    for line_info in block[back_index:len(block)-1]:
         back_content.append(line_info[1].rstrip())
     back_content = _trim_lines(back_content)
-    back_content = _trim_uuid_line(back_content)
 
     ad_prefix = "````ad-"
     for i in range(len(front_content)):
@@ -426,7 +340,7 @@ def _parse_block(block):
     front_content = "\n".join(front_content) 
     back_content = _get_backend_value(back_content)
 
-    return front_title, block[0][0], front_content, back_content
+    return front_title, front_content, back_content
 
 
 def _cal_md5_for_block(block):
@@ -488,11 +402,11 @@ def get_unsuspend_and_suspend_uuid_list():
             if SUSPEND_FLAG in line:
                 unsuspend_line_index = index
 
-            if UUID_FLAG in line:
-                all_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
+            if END_FLAG in line:
+                all_uuid_set.add(line.split()[1].strip())
 
-            if UUID_FLAG in line and unsuspend_line_index == -1:
-                unsuspend_uuid_set.add(extract_value_from_str(line, UUID_FLAG))
+            if END_FLAG in line and unsuspend_line_index == -1:
+                unsuspend_uuid_set.add(line.split()[1].strip())
         
         percent = 0
         if unsuspend_line_index > -1:

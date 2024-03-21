@@ -168,13 +168,6 @@ def generate_uuid():
     return str(uuid.uuid4()).replace("-", "")
 
 
-def get_uuid_line(uuid):
-    """
-    生成uuid行。该行将被插入到卡片块中
-    """
-    return f"\n{UUID_FLAG}: {uuid}"
-
-
 def backup_and_write_to_file(data, file_path):
     """
     将data写入file_path
