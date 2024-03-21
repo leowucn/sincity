@@ -113,29 +113,47 @@ def calculate_dict_md5(data_dict):
     return hashlib.md5(data_str.encode()).hexdigest()
 
 
-def split_list_by_element(file_path, split_element):
+def split_list_by_element(file_path, split_element, keep_last):
     """
     打开文件，获取所有行，并使用指定元素分割
     Args:
         file_path: 文件路径
         split_element: 使用该元素进行数组切分
+        keep_last: 因为算法缺陷，最后一部分切分块未必包含 split_element，这里需要判断是否进行检查及返回
+
+    Returns:
+        块列表。要返回所有块，keep_last传递True
     """
     line_list = get_file_lines(file_path)
 
-    result = []
+    tmp = []
     sublist = []
 
     for index in range(len(line_list)):
         if split_element in line_list[index]:
-            if not sublist:
-                continue
-
-            result.append(sublist)
+            sublist.append((index, split_element))
+            tmp.append(sublist)
             sublist = []
         else:
             sublist.append((index, line_list[index]))
-    
-    return result
+
+    if sublist:
+        tmp.append(sublist)
+
+    if keep_last:
+        return tmp
+    else:
+        result = []
+        for item_list in tmp:
+            found = False
+            for item in item_list:
+                if split_element in item:
+                    found = True
+                    break
+            if found:
+                result.append(item_list)
+
+        return result
 
 
 def trim_blocks(blocks):

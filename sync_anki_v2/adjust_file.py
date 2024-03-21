@@ -8,7 +8,7 @@ def _insert_uuid_if_need(file_path):
     """
     如果卡片块没有uuid则插入，否则忽略
     """
-    blocks = split_list_by_element(file_path, END_FLAG)
+    blocks = split_list_by_element(file_path, END_FLAG, True)
 
     modified_blocks = []
 
