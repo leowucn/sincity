@@ -40,27 +40,6 @@ def _remove_multiple_whitespace_line(file_path):
         file.write(modified_content)
 
 
-def _append_three_star(file_path):
-    """
-    某些行以三个*符号开头，但是不是以三个*结尾。自动在行尾添加三个*
-    """
-    # 读取文件内容
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-
-    # 处理以三个星号开头但不以三个星号结尾的行
-    modified_lines = []
-
-    for line in lines:
-        if line.startswith('***') and not line.endswith('***\n'):
-            line = line.rstrip() + '***\n'
-        modified_lines.append(line)
-
-    # 写回文件
-    with open(file_path, 'w') as file:
-        file.writelines(modified_lines)
-
-
 def _replace_dollar_symbol(file_path):
     """
     替换$符号
@@ -107,11 +86,64 @@ def _remove_former_redundant_dash_zero(file_path):
         file.writelines(modified_lines)
 
 
+def _format_end_flag_lines(file_path):
+    """
+    格式化 end_flag 附近的行的格式
+    """
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    modified_lines = []
+    for i in range(len(lines)):
+        if i < len(lines) - 1 and lines[i].strip() == '---' and lines[i+1].strip().startswith('==3=='):
+            # Check if there are less than 2 consecutive empty lines before '---'
+            empty_lines_count = 0
+            j = i - 1
+            while j >= 0 and lines[j].strip() == '':
+                empty_lines_count += 1
+                j -= 1
+
+            if empty_lines_count < 2:
+                modified_lines.extend(['\n' for _ in range(2 - empty_lines_count)])
+
+            # Check if there are more than 2 consecutive empty lines before '---'
+            j = i - 1
+            while j >= 0 and lines[j].strip() == '':
+                j -= 1
+            while j >= 0 and lines[j].strip() == '':
+                modified_lines.pop()
+                j -= 1
+
+        modified_lines.append(lines[i])
+
+    with open(file_path, 'w') as file:
+        file.writelines(modified_lines)
+
+
+def _insert_three_dash(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    modified_lines = []
+    for i in range(len(lines)):
+        if i > 0 and '==3==' in lines[i] and lines[i-1].strip() != '---':
+            modified_lines.append('---\n')
+        modified_lines.append(lines[i])
+
+    with open(file_path, 'w') as file:
+        file.writelines(modified_lines)
+
+
 def adjust_files(file_list):
     for file_path in file_list:
+        if not file_path.lower().endswith('.md'):
+            continue
+
         _insert_uuid_if_need(file_path)
         _remove_multiple_whitespace_line(file_path)
-        _append_three_star(file_path)
         _replace_dollar_symbol(file_path)
         _remove_former_redundant_dash_zero(file_path)
+        # _insert_three_dash 必须在 _format_end_flag_lines 之前执行
+        _insert_three_dash(file_path)
+        _format_end_flag_lines(file_path)
 

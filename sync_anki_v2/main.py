@@ -14,6 +14,7 @@ def sync():
 
     print_dash_with_title(" total files ")
     path_list = get_file_path_list()
+
     # 调整文件内容。比如自动增加uuid行
     adjust_files(path_list)
     for file_path in path_list:

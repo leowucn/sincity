@@ -19,6 +19,9 @@ def _get_path_list():
 
     file_list = get_file_list(path_list)
     for file_path in file_list:
+        if not file_path.lower().endswith('.md'):
+            continue
+
         ext = get_file_extension(file_path)
         if ext in IGNORE_UPLOAD_EXTENSIONS:
             continue

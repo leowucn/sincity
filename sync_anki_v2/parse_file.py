@@ -102,7 +102,7 @@ def _get_file_path_value(file_path):
     file_path = file_path[len(OB_NOTE_PATH):]
     if file_path.startswith("/"):
         file_path = file_path[1:]
-    return file_path.replace("/", " / ")
+    return file_path.replace("/", "  /  ")
 
 
 def _is_markdown_heading(text):
@@ -319,7 +319,8 @@ def _parse_block(block):
     else:
         back_index = start_flag_index + 1
 
-    for line_info in block[back_index:len(block)-1]:
+    # 去掉最后的 ---和END_FLAG 行
+    for line_info in block[back_index:len(block)-2]:
         back_content.append(line_info[1].rstrip())
     back_content = _trim_lines(back_content)
 
