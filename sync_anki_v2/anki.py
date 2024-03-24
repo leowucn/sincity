@@ -218,10 +218,13 @@ def _unsuspend_card(card_ids):
         raise RuntimeError(f"_unsuspend_card 操作出错, card_ids: {card_ids}, err: {response.json()['error']}")
 
 
-def _get_deck_stats(deck_name):
+def _get_deck_stats(deck_name_list):
     """
     查询deck统计信息
     """
+    if type(deck_name_list) != list:
+        raise RuntimeError("参数类型错误")
+
     response = requests.post(
         ANKI_CONNECT,
         json.dumps(
@@ -229,23 +232,12 @@ def _get_deck_stats(deck_name):
                 "action": "getDeckStats",
                 "version": 6,
                 "params": {
-                    "decks": [deck_name],
+                    "decks": deck_name_list,
                 },
             }
         ),
     )
-    # 返回数据结构如下
-    #
-    # {
-    #     "deck_id": 1651445861960,
-    #     "name": "Easy Spanish",
-    #     "new_count": 26,
-    #     "learn_count": 10,
-    #     "review_count": 5,
-    #     "total_in_deck": 852
-    # }
-    response = json.loads(response.text)
-    return response["result"][list(response["result"].keys())[0]]
+    return json.loads(response.text)["result"]
 
 
 def _create_deck_if_need(deck_name):
@@ -669,6 +661,9 @@ def create_deck_if_need(block_list):
 
 
 def change_deck_note(block_list):
+    if not block_list:
+        return
+
     data = {}
     for block in block_list:
         deck = block["deck"]
@@ -816,18 +811,29 @@ def delete_deck():
         deck_name = convert_file_path_to_anki_deck_name(file_path)
         _delete_deck(deck_name)
 
+    # 如果找到了空的deck, 那么极有可能它的父deck也是空的
+    # 如果第一次没有找到空的deck, 那么直接退出
+    found_empty_deck = False
     # 删除没有卡片的空deck
     #
-    # 这里之所以要执行10次，是因为每次会把最后一空卡片deck删掉
+    # 这里之所以要执行15次，是因为每次会把最后一空卡片deck删掉
     # 通过执行多次，可以删除嵌套层级很深的空deck
-    for i in range(10):
+    for i in range(15):
         print_first_level_log(f"尝试第 {i + 1} 次清理空deck")
-        for deck_name in _remove_prefix_deck_name(_get_all_valid_decks()):
-            if _get_deck_stats(deck_name)["total_in_deck"] == 0:
+        res = _get_deck_stats(_remove_prefix_deck_name(_get_all_valid_decks()))
+        for item in res.values():
+            if item["total_in_deck"] == 0:
                 _delete_deck(deck_name)
+                found_empty_deck = True
+
+        if not found_empty_deck:
+            break
 
 
 def forget_cards(block_list):
+    if not block_list:
+        return
+
     data = {}
     for block in block_list:
         deck = block["deck"]
@@ -855,6 +861,11 @@ def forget_cards(block_list):
 
 
 def suspend_and_unsuspend_cards(block_list):
+    # 这里即使 block_list 为空也继续运行，目的是为了打印日志
+    # 方便看到目前所有文件的 ==0== 进度
+    # if not block_list:
+    #     return
+
     data = {}
     for block in block_list:
         deck = block["deck"]
